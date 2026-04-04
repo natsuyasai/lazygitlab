@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import ModalScreen
@@ -29,7 +31,7 @@ _KEYBINDINGS: list[tuple[str, str, str]] = [
 class HelpScreen(ModalScreen[None]):
     """キーバインド一覧を表示するモーダルスクリーン。"""
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("escape", "dismiss", "Close"),
         Binding("question_mark", "dismiss", "Close"),
     ]

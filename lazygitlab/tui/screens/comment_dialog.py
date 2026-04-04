@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -24,7 +25,7 @@ _logger = get_logger(__name__)
 class CommentDialog(ModalScreen[None]):
     """コメント入力ダイアログ。INLINE / NOTE / REPLY の3種別に対応。"""
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("ctrl+s", "submit", "Submit"),
         Binding("ctrl+e", "open_editor", "External Editor"),
         Binding("escape", "cancel", "Cancel"),
@@ -129,7 +130,7 @@ class CommentDialog(ModalScreen[None]):
             _logger.info("Opening external editor: %s %s", editor_cmd, tmp_path)
 
             async with self.app.suspend():
-                result = subprocess.run(
+                result = subprocess.run(  # noqa: S603
                     [editor_cmd, str(tmp_path)],
                     check=False,
                 )

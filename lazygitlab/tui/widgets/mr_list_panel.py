@@ -74,7 +74,7 @@ class MRListPanel(Widget):
             MRCategory.ASSIGNED_TO_OTHERS,
         ]
 
-        for category, result in zip(categories, results):
+        for category, result in zip(categories, results, strict=False):
             if isinstance(result, Exception):
                 _logger.error("Failed to load %s: %s", category, result)
                 label = f"{CATEGORY_LABELS[category]} (error)"

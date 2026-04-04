@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import ModalScreen
@@ -11,7 +13,7 @@ from textual.widgets import Button, Label
 class ErrorDialog(ModalScreen[None]):
     """エラーメッセージを表示するモーダルダイアログ。"""
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("escape", "dismiss", "Close"),
         Binding("enter", "dismiss", "Close"),
     ]

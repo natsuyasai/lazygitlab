@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
@@ -89,7 +91,7 @@ def _build_overview_text(mr_detail, discussions: list[Discussion]) -> str:
 class ContentPanel(Widget):
     """右ペイン: Overview・差分をレンダリングするウィジェット。"""
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("t", "toggle_diff_mode", "Toggle unified/side-by-side"),
         Binding("c", "add_comment", "Add Comment"),
     ]
@@ -211,7 +213,7 @@ class ContentPanel(Widget):
         new_line_no = 0
         hunk_new_start = 0
 
-        for i, line in enumerate(lines):
+        for _i, line in enumerate(lines):
             # ハンクヘッダーから行番号を解析する
             if line.startswith("@@"):
                 import re

@@ -162,9 +162,6 @@ async def test_error_dialog_shows_on_connection_failure():
 @pytest.mark.asyncio
 async def test_error_dialog_dismiss():
     """ErrorDialogが表示され、OKボタンで閉じることができることを確認する。"""
-    from lazygitlab.tui.screens.error_dialog import ErrorDialog as ED
-
-    app = ED.__new__(ED)  # ErrorDialog は単独でのテストが難しいため App に埋め込む
 
     # ErrorDialog をスタンドアロンでテストする方式
     class _TestApp(LazyGitLabApp):

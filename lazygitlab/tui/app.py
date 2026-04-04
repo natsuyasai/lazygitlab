@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import ClassVar
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -28,7 +29,7 @@ class LazyGitLabApp(App):
 
     CSS_PATH = _CSS_PATH
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("q", "quit", "Quit"),
         Binding("question_mark", "show_help", "Help"),
         Binding("r", "refresh", "Refresh"),
@@ -120,13 +121,13 @@ class LazyGitLabApp(App):
         try:
             mr_panel = self.query_one(MRListPanel)
             await mr_panel.refresh_list()
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         try:
             content_panel = self.query_one(ContentPanel)
             await content_panel.clear_content()
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         _logger.info("Refreshed MR list and cleared cache")
@@ -147,7 +148,7 @@ class LazyGitLabApp(App):
         _logger.info("Opening editor: %s +%d %s", editor, line_no, file_path)
         try:
             async with self.suspend():
-                subprocess.run([editor, f"+{line_no}", file_path], check=False)
+                subprocess.run([editor, f"+{line_no}", file_path], check=False)  # noqa: S603
         except FileNotFoundError:
             await self.push_screen(ErrorDialog(f"Editor not found: {editor}"))
         except Exception as exc:
@@ -162,7 +163,7 @@ class LazyGitLabApp(App):
                 mr_panel.remove_class("-hidden")
             else:
                 mr_panel.add_class("-hidden")
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     def action_quit(self) -> None:
