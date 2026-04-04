@@ -24,7 +24,7 @@
 
 ### プロジェクト構造セットアップ
 
-- [ ] ステップ1: プロジェクト基盤ファイルの作成
+- [x] ステップ1: プロジェクト基盤ファイルの作成
   - `pyproject.toml` — パッケージ設定、依存関係定義、エントリーポイント
   - `lazygitlab/__init__.py` — パッケージ初期化、バージョン定義
   - `lazygitlab/__main__.py` — エントリーポイント、CLI引数解析、グローバルエラーハンドラ
@@ -33,13 +33,13 @@
 
 ### データモデル
 
-- [ ] ステップ2: 共有データモデルの生成
+- [x] ステップ2: 共有データモデルの生成
   - `lazygitlab/models.py` — 全dataclass定義（AppConfig, GitLabProjectInfo, MergeRequestSummary, MergeRequestDetail, FileChange, FileDiff, CommentType, CommentContext, Discussion, Note, NotePosition）
   - domain-entities.md の型制約・不変条件に準拠
 
 ### ビジネスロジック
 
-- [ ] ステップ3: ConfigManager の生成
+- [x] ステップ3: ConfigManager の生成
   - `lazygitlab/infrastructure/config.py`
   - 設定ファイルパス解決（XDG対応）
   - TOML読み込み・AppConfigマッピング
@@ -48,7 +48,7 @@
   - デフォルト設定生成
   - ファイルパーミッション管理（SECURITY-12）
 
-- [ ] ステップ4: GitRepoDetector の生成
+- [x] ステップ4: GitRepoDetector の生成
   - `lazygitlab/infrastructure/git_detector.py`
   - リモートURL検出（フォールバックチェーン: origin → 最初のremote → 設定指定）
   - SSH/HTTPS/SSH+ポート の3パターン解析
@@ -56,7 +56,7 @@
   - カスタム例外クラス（NotAGitRepositoryError, NoRemoteConfiguredError, RemoteNotFoundError, URLParseError, GitCommandNotFoundError）
   - タイムアウト30秒
 
-- [ ] ステップ5: Logger の生成
+- [x] ステップ5: Logger の生成
   - `lazygitlab/infrastructure/logger.py`
   - setup_logging(): RotatingFileHandler（5MB/3世代）、ログディレクトリ作成
   - TokenMaskingFilter: glpat-パターン・長い英数字列のマスキング（SECURITY-03）
@@ -65,12 +65,12 @@
 
 ### ユニットテスト
 
-- [ ] ステップ6: データモデルのユニットテスト
+- [x] ステップ6: データモデルのユニットテスト
   - `lazygitlab/infrastructure/tests/test_models.py`
   - 各dataclassの生成テスト
   - CommentContext の不変条件テスト
 
-- [ ] ステップ7: ConfigManager のユニットテスト
+- [x] ステップ7: ConfigManager のユニットテスト
   - `lazygitlab/infrastructure/tests/test_config.py`
   - 設定ファイル読み込み（モック）
   - バリデーション（各ルールのテスト）
@@ -78,14 +78,14 @@
   - パス解決ロジック
   - 設定ファイル不存在時のエラー
 
-- [ ] ステップ8: GitRepoDetector のユニットテスト
+- [x] ステップ8: GitRepoDetector のユニットテスト
   - `lazygitlab/infrastructure/tests/test_git_detector.py`
   - SSH/HTTPS/SSH+ポート各パターンの解析テスト（モック）
   - サブグループパスの解析テスト
   - リモートフォールバックチェーンのテスト（モック）
   - 各エラーケース（git未初期化、remote未設定等）のテスト
 
-- [ ] ステップ9: Logger のユニットテスト
+- [x] ステップ9: Logger のユニットテスト
   - `lazygitlab/infrastructure/tests/test_logger.py`
   - TokenMaskingFilter のマスキングテスト
   - setup_logging のハンドラ設定テスト（モック）
@@ -93,7 +93,7 @@
 
 ### 統合テスト
 
-- [ ] ステップ10: 統合テスト
+- [x] ステップ10: 統合テスト
   - `lazygitlab/infrastructure/tests/test_integration.py`
   - 実際のTOMLファイル読み書き（tmpdir使用）
   - 実際のgitリポジトリでのリモートURL検出（tmpdir使用）
@@ -101,7 +101,7 @@
 
 ### ドキュメント
 
-- [ ] ステップ11: コードサマリードキュメント
+- [x] ステップ11: コードサマリードキュメント
   - `aidlc-docs/construction/infrastructure/code/code-summary.md`
   - 生成されたファイル一覧と概要
   - テストカバレッジの概要
