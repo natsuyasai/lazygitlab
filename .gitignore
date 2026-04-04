@@ -215,6 +215,4 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-.steering
-aidlc-docs
-CALUDE.md
+settings.local.json
