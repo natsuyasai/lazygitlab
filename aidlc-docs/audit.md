@@ -143,3 +143,22 @@
 **コンテキスト**：CONSTRUCTION - NFR要件（UNIT-01: Infrastructure）
 
 ---
+
+## CONSTRUCTION - NFR要件（UNIT-01）- 承認
+
+**タイムスタンプ**：2026-04-04T09:35:00Z
+**ユーザー入力**：「続けてください。」
+**AI応答**：「NFR要件を承認済みとして記録。コード生成（UNIT-01）に進む。」
+**ステータス**：承認済み
+**コンテキスト**：CONSTRUCTION - NFR要件（UNIT-01: Infrastructure）承認 → コード生成へ移行
+
+---
+
+## CONSTRUCTION - コード生成（UNIT-01）- パート1：プランニング
+
+**タイムスタンプ**：2026-04-04T09:40:00Z
+**ユーザー入力**：（NFR要件承認からの自動移行）
+**AI応答**：「UNIT-01 コード生成計画を作成。11ステップのinfrastructure-code-generation-plan.mdを生成。承認を待つ。」
+**コンテキスト**：CONSTRUCTION - コード生成（UNIT-01: Infrastructure）- パート1プランニング
+
+---

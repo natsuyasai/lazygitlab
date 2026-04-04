@@ -4,7 +4,7 @@
 
 - **プロジェクトタイプ**：グリーンフィールド
 - **開始日**：2026-04-01T09:00:00Z
-- **現在のステージ**：CONSTRUCTION - NFR要件（UNIT-01）
+- **現在のステージ**：CONSTRUCTION - コード生成（UNIT-01）
 
 ## ワークスペースの状態
 
@@ -57,6 +57,6 @@
 ## 現在のステータス
 
 - **ライフサイクルフェーズ**：CONSTRUCTION
-- **現在のステージ**：NFR要件（UNIT-01: Infrastructure）
-- **次のステージ**：コード生成（UNIT-01: Infrastructure）
+- **現在のステージ**：コード生成（UNIT-01: Infrastructure）
+- **次のステージ**：機能設計（UNIT-02: GitLab API Services）
 - **ステータス**：実行中
