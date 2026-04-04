@@ -28,7 +28,7 @@ def _config(remote_name: str = "") -> AppConfig:
 
 
 class TestURLParsing:
-    """GitRepoDetector._parse_url のテスト（静的メソッド、subprocessなし）。"""
+    """GitRepoDetector._parse_url のテスト(静的メソッド、subprocessなし)。"""
 
     def test_標準SSH形式のURLを解析する(self):
         host, path = GitRepoDetector._parse_url("git@gitlab.com:group/project.git")

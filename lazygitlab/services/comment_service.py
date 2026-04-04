@@ -40,9 +40,9 @@ class CommentService:
         self._logger.debug("CommentService loaded: project=%s", self._project_path)
 
     async def get_discussions(self, mr_iid: int) -> list[Discussion]:
-        """MRのディスカッション一覧を取得する（キャッシュ対象）。
+        """MRのディスカッション一覧を取得する(キャッシュ対象)。
 
-        システムノート（system=True）は除外する。
+        システムノート(system=True)は除外する。
 
         Raises:
             MRNotFoundError: 指定IIDのMRが存在しない場合。
@@ -82,10 +82,10 @@ class CommentService:
 
         Args:
             mr_iid: MRのプロジェクト内番号。
-            file_path: コメント対象のファイルパス（new_path）。
+            file_path: コメント対象のファイルパス(new_path)。
             line: コメント対象の行番号。
             body: コメント本文。
-            line_type: "new"（追加行）または "old"（削除行）。
+            line_type: "new"(追加行)または "old"(削除行)。
 
         Raises:
             EmptyCommentError: コメント本文が空または空白のみの場合。
@@ -136,7 +136,7 @@ class CommentService:
         raise GitLabConnectionError("コメント投稿後のレスポンスが不正です。")
 
     async def add_note(self, mr_iid: int, body: str) -> Note:
-        """MR全体へのノートを投稿する。
+        """MR全体へのnoteを投稿する。
 
         Raises:
             EmptyCommentError: コメント本文が空または空白のみの場合。
@@ -202,7 +202,7 @@ class CommentService:
     def _convert_discussion(self, raw: Any) -> Discussion | None:
         """python-gitlab Discussion オブジェクトを内部モデルに変換する。
 
-        ユーザーノートが1件もない場合はNoneを返す。
+        ユーザーのnoteが1件もない場合はNoneを返す。
         """
         raw_notes = raw.attributes.get("notes", [])
         notes = [self._convert_note(n) for n in raw_notes if not n.get("system", False)]

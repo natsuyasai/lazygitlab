@@ -96,7 +96,7 @@ class ConfigManager:
     # ------------------------------------------------------------------
 
     def validate(self, config: AppConfig) -> list[str]:
-        """バリデーションエラーのリストを返す（空リスト = 有効）。"""
+        """バリデーションエラーのリストを返す(空リスト = 有効)。"""
         errors: list[str] = []
         errors.extend(self._validate_gitlab_url(config.gitlab_url))
         errors.extend(self._validate_token(config.token))

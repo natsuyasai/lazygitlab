@@ -12,7 +12,7 @@ class LazyGitLabAPIError(Exception):
 
 
 class GitLabAuthError(LazyGitLabAPIError):
-    """GitLab認証失敗（401）。"""
+    """GitLab認証失敗(401)。"""
 
 
 class GitLabConnectionError(LazyGitLabAPIError):
@@ -20,11 +20,11 @@ class GitLabConnectionError(LazyGitLabAPIError):
 
 
 class GitLabProjectNotFoundError(LazyGitLabAPIError):
-    """指定されたGitLabプロジェクトが見つからない（404）。"""
+    """指定されたGitLabプロジェクトが見つからない(404)。"""
 
 
 class GitLabAccessDeniedError(LazyGitLabAPIError):
-    """GitLabリソースへのアクセス権限がない（403）。"""
+    """GitLabリソースへのアクセス権限がない(403)。"""
 
 
 class MRNotFoundError(LazyGitLabAPIError):

@@ -114,9 +114,9 @@ class GitRepoDetector:
 
     def _run_git(self, args: list[str]) -> str:
         """gitコマンドを実行してstdoutを返す。エラー時は例外を送出する。"""
-        cmd = ["git"] + args
+        cmd = ["git", *args]
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603
                 cmd,
                 capture_output=True,
                 text=True,
@@ -138,7 +138,7 @@ class GitRepoDetector:
             stderr_lower = result.stderr.lower()
             if "not a git repository" in stderr_lower:
                 raise NotAGitRepositoryError("gitリポジトリ内で実行してください。")
-            # 汎用gitエラー — stderrをユーザー向けメッセージに含めない（SECURITY-09）
+            # 汎用gitエラー — stderrをユーザー向けメッセージに含めない(SECURITY-09)
             raise subprocess.CalledProcessError(
                 result.returncode,
                 cmd,

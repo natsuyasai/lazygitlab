@@ -31,7 +31,7 @@ def _default_log_dir() -> Path:
 
 
 class TokenMaskingFilter(logging.Filter):
-    """ログレコードから機密トークンをマスクするフィルター（SECURITY-03）。"""
+    """ログレコードから機密トークンをマスクするフィルター(SECURITY-03)。"""
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.msg = _mask(str(record.msg))

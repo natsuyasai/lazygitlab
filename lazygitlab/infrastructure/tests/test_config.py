@@ -63,7 +63,7 @@ class TestConfigManagerLoad:
         monkeypatch.setattr("builtins.input", lambda _: "y")
         with patch.object(manager, "_run_setup_wizard") as mock_wizard:
             mock_wizard.return_value = AppConfig(gitlab_url="https://gitlab.com", token="glpat-x")
-            result = manager.load()
+            manager.load()
         mock_wizard.assert_called_once()
 
     def test_TOMLパースエラー時にNを入力すると終了する(self, tmp_path, monkeypatch):

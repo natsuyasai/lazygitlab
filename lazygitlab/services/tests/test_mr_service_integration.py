@@ -2,8 +2,8 @@
 
 環境変数:
   LAZYGITLAB_TEST_TOKEN   : GitLab Personal Access Token
-  LAZYGITLAB_TEST_URL     : GitLabのURL（例: https://gitlab.com）
-  LAZYGITLAB_TEST_PROJECT : テスト対象プロジェクトパス（例: group/project）
+  LAZYGITLAB_TEST_URL     : GitLabのURL(例: https://gitlab.com)
+  LAZYGITLAB_TEST_PROJECT : テスト対象プロジェクトパス(例: group/project)
 
 環境変数が未設定の場合はすべてのテストをスキップする。
 """

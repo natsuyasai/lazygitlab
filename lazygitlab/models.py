@@ -84,7 +84,7 @@ class FileChange:
 
 @dataclass
 class FileDiff:
-    """ファイルのdiff内容（unified diff形式）。"""
+    """ファイルのdiff内容(unified diff形式)。"""
 
     file_path: str
     diff: str

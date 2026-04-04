@@ -135,7 +135,7 @@ class MRService:
         return PaginatedResult(items=items, has_next_page=has_next, next_page=next_page)
 
     async def get_mr_detail(self, mr_iid: int) -> MergeRequestDetail:
-        """MR詳細を取得する（キャッシュ対象）。
+        """MR詳細を取得する(キャッシュ対象)。
 
         Raises:
             MRNotFoundError: 指定IIDのMRが存在しない場合。
@@ -161,7 +161,7 @@ class MRService:
         return detail
 
     async def get_mr_changes(self, mr_iid: int) -> list[FileChange]:
-        """MRの変更ファイル一覧を取得する（キャッシュ対象）。
+        """MRの変更ファイル一覧を取得する(キャッシュ対象)。
 
         Raises:
             MRNotFoundError: 指定IIDのMRが存在しない場合。
@@ -188,7 +188,7 @@ class MRService:
         return changes
 
     async def get_mr_diff(self, mr_iid: int, file_path: str) -> FileDiff:
-        """指定ファイルの差分を取得する（キャッシュ対象、遅延取得）。
+        """指定ファイルの差分を取得する(キャッシュ対象、遅延取得)。
 
         Raises:
             MRNotFoundError: 指定IIDのMRが存在しない場合。

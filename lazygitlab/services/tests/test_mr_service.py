@@ -137,7 +137,7 @@ class TestGetMrDetail:
         mr = _make_mr(iid=7)
         with patch("asyncio.to_thread", new=AsyncMock(return_value=mr)):
             detail1 = await service.get_mr_detail(7)
-        # 2回目はキャッシュから（to_thread呼ばれない）
+        # 2回目はキャッシュから(to_thread呼ばれない)
         detail2 = service._detail_cache.get(7)
         assert detail1.iid == 7
         assert detail2 is not None
