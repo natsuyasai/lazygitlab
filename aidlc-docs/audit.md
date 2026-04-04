@@ -171,3 +171,81 @@
 **コンテキスト**：CONSTRUCTION - コード生成（UNIT-01: Infrastructure）- パート2生成完了
 
 ---
+
+## CONSTRUCTION - 機能設計（UNIT-02: GitLab API Services）開始
+
+**タイムスタンプ**：2026-04-04T10:00:00Z
+**ユーザー入力**：「@aidlc-docs/audit.md @.steering/aidlc-rules/sdd/core-workflow.md 次の作業に移ってください」
+**AI応答**：「UNIT-02 機能設計計画を作成。6つの質問を含むgitlab-api-services-functional-design-plan.mdを生成。」
+**コンテキスト**：CONSTRUCTION - 機能設計（UNIT-02: GitLab API Services）- 計画作成・質問提示
+
+---
+
+## CONSTRUCTION - 機能設計（UNIT-02）- 質問回答受領
+
+**タイムスタンプ**：2026-04-04T10:05:00Z
+**ユーザー入力**：「回答を記載しました」（gitlab-api-services-functional-design-plan.mdの全6問に回答完了）
+**回答内容**：Q1:A(遅延読み込み20件/ページ), Q2:C(ソート順ユーザー設定可能), Q3:A(リトライなし), Q4:A(openedのMRのみ), Q5:B(ファイル差分遅延取得), Q6:B(セッション内メモリキャッシュ)
+**矛盾チェック**：矛盾なし
+**AI応答**：「回答確認。矛盾なし。機能設計成果物を生成：business-logic-model.md, business-rules.md, domain-entities.md」
+**コンテキスト**：CONSTRUCTION - 機能設計（UNIT-02: GitLab API Services）
+
+---
+
+## CONSTRUCTION - 機能設計（UNIT-02）- 承認
+
+**タイムスタンプ**：2026-04-04T10:10:00Z
+**ユーザー入力**：「承認します」
+**AI応答**：「機能設計を承認済みとして記録。NFR要件（UNIT-02）に進む。」
+**ステータス**：承認済み
+**コンテキスト**：CONSTRUCTION - 機能設計（UNIT-02: GitLab API Services）承認 → NFR要件へ移行
+
+---
+
+## CONSTRUCTION - NFR要件（UNIT-02: GitLab API Services）開始
+
+**タイムスタンプ**：2026-04-04T10:15:00Z
+**ユーザー入力**：（機能設計承認からの自動移行）
+**AI応答**：「UNIT-02 NFR要件計画を作成。5つの質問を含むgitlab-api-services-nfr-requirements-plan.mdを生成。」
+**コンテキスト**：CONSTRUCTION - NFR要件（UNIT-02: GitLab API Services）- 計画作成・質問提示
+
+---
+
+## CONSTRUCTION - NFR要件（UNIT-02）- 質問回答受領
+
+**タイムスタンプ**：2026-04-04T10:20:00Z
+**ユーザー入力**：「回答を記載しました」（gitlab-api-services-nfr-requirements-plan.mdの全5問に回答完了）
+**回答内容**：Q1:C(接続10秒+読み取り30秒), Q2:B(async/await実装), Q3:B(エントリ数上限), Q4:UNIT-01と同様=B(モック+実環境併用), Q5:C(完全固定)
+**矛盾チェック**：矛盾なし
+**AI応答**：「回答確認。矛盾なし。NFR要件成果物を生成：nfr-requirements.md, tech-stack-decisions.md」
+**コンテキスト**：CONSTRUCTION - NFR要件（UNIT-02: GitLab API Services）
+
+---
+
+## CONSTRUCTION - NFR要件（UNIT-02）- 承認
+
+**タイムスタンプ**：2026-04-04T10:25:00Z
+**ユーザー入力**：「承認します。次のフェーズに進んでください。」
+**AI応答**：「NFR要件を承認済みとして記録。コード生成（UNIT-02）パート1プランニングに進む。」
+**ステータス**：承認済み
+**コンテキスト**：CONSTRUCTION - NFR要件（UNIT-02: GitLab API Services）承認 → コード生成へ移行
+
+---
+
+## CONSTRUCTION - コード生成（UNIT-02）- パート1：プランニング
+
+**タイムスタンプ**：2026-04-04T10:30:00Z
+**ユーザー入力**：（NFR要件承認からの自動移行）
+**AI応答**：「UNIT-02 コード生成計画を作成。15ステップのgitlab-api-services-code-generation-plan.mdを生成。承認を待つ。」
+**コンテキスト**：CONSTRUCTION - コード生成（UNIT-02: GitLab API Services）- パート1プランニング
+
+---
+
+## CONSTRUCTION - コード生成（UNIT-02）- パート2：生成
+
+**タイムスタンプ**：2026-04-04T10:35:00Z
+**ユーザー入力**：「承認します。続けてください。」
+**AI応答**：「UNIT-02 コード生成パート2を実行。全15ステップ完了。生成ファイル：`lazygitlab/services/__init__.py`, `lazygitlab/services/exceptions.py`, `lazygitlab/services/cache.py`, `lazygitlab/services/types.py`, `lazygitlab/services/gitlab_client.py`, `lazygitlab/services/mr_service.py`, `lazygitlab/services/comment_service.py`, テスト5ファイル, `aidlc-docs/construction/gitlab-api-services/code/code-summary.md`。pyproject.tomlにpytest-asyncio追加。」
+**コンテキスト**：CONSTRUCTION - コード生成（UNIT-02: GitLab API Services）- パート2生成完了
+
+---

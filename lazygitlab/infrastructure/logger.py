@@ -55,7 +55,8 @@ def _mask_args(
     return tuple(
         {k: _mask(str(v)) if isinstance(v, str) else v for k, v in a.items()}
         if isinstance(a, dict)
-        else _mask(str(a)) if isinstance(a, str)
+        else _mask(str(a))
+        if isinstance(a, str)
         else a
         for a in args
     )

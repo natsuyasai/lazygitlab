@@ -57,6 +57,6 @@
 ## 現在のステータス
 
 - **ライフサイクルフェーズ**：CONSTRUCTION
-- **現在のステージ**：コード生成（UNIT-01: Infrastructure）✅ 完了
-- **次のステージ**：機能設計（UNIT-02: GitLab API Services）
-- **ステータス**：UNIT-01 コード生成完了 — レビュー待ち
+- **現在のステージ**：コード生成（UNIT-02: GitLab API Services）✅ 完了
+- **次のステージ**：機能設計（UNIT-03: TUI Application）
+- **ステータス**：UNIT-02 コード生成完了 — レビュー待ち
