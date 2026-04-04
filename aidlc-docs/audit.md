@@ -249,3 +249,90 @@
 **コンテキスト**：CONSTRUCTION - コード生成（UNIT-02: GitLab API Services）- パート2生成完了
 
 ---
+
+## CONSTRUCTION - コード生成（UNIT-02）- 承認
+
+**タイムスタンプ**：2026-04-04T10:40:00Z
+**ユーザー入力**：「続けてください」
+**AI応答**：「UNIT-02 コード生成を承認済みとして記録。UNIT-03 機能設計に進む。」
+**ステータス**：承認済み
+**コンテキスト**：CONSTRUCTION - コード生成（UNIT-02）承認 → UNIT-03 機能設計へ移行
+
+---
+
+## CONSTRUCTION - 機能設計（UNIT-03: TUI Application）開始
+
+**タイムスタンプ**：2026-04-04T10:45:00Z
+**ユーザー入力**：（UNIT-02承認からの自動移行）
+**AI応答**：「UNIT-03 機能設計計画を作成。7つの質問を含むtui-application-functional-design-plan.mdを生成。」
+**コンテキスト**：CONSTRUCTION - 機能設計（UNIT-03: TUI Application）- 計画作成・質問提示
+
+---
+
+## CONSTRUCTION - 機能設計（UNIT-03）- 質問回答受領
+
+**タイムスタンプ**：2026-04-04T10:50:00Z
+**ユーザー入力**：「回答を記載しました」（tui-application-functional-design-plan.mdの全7問に回答完了）
+**回答内容**：Q1:カスタム(デフォルト30:70+左ペイン開閉トグル), Q2:C(unified/side-by-side切替), Q3:A(lazygit準拠), Q4:A(マークダウン風), Q5:C(TextArea+外部エディタ両対応), Q6:B(モーダルダイアログ), Q7:A(Overview+ファイルフラット表示)
+**矛盾チェック**：矛盾なし
+**AI応答**：「回答確認。矛盾なし。機能設計成果物を生成：business-logic-model.md, business-rules.md, domain-entities.md, frontend-components.md」
+**コンテキスト**：CONSTRUCTION - 機能設計（UNIT-03: TUI Application）
+
+---
+
+## CONSTRUCTION - 機能設計（UNIT-03）- 承認
+
+**タイムスタンプ**：2026-04-04T10:55:00Z
+**ユーザー入力**：「承認します。次に進んでください。」
+**ステータス**：承認済み
+**コンテキスト**：CONSTRUCTION - 機能設計（UNIT-03）承認 → NFR要件へ移行
+
+---
+
+## CONSTRUCTION - NFR要件（UNIT-03: TUI Application）開始
+
+**タイムスタンプ**：2026-04-04T11:00:00Z
+**ユーザー入力**：（機能設計承認からの自動移行）
+**AI応答**：「UNIT-03 NFR要件計画を作成。4つの質問を含むtui-application-nfr-requirements-plan.mdを生成。」
+**コンテキスト**：CONSTRUCTION - NFR要件（UNIT-03: TUI Application）- 計画作成・質問提示
+
+---
+
+## CONSTRUCTION - NFR要件（UNIT-03）- 質問回答受領
+
+**タイムスタンプ**：2026-04-04T11:05:00Z
+**ユーザー入力**：「回答しました」（tui-application-nfr-requirements-plan.mdの全4問に回答完了）
+**回答内容**：Q1:B(仮想スクロール), Q2:C(ステータスバーインジケーター), Q3:B+A(ロジック分離基本+基本ケースはPilotテスト), Q4:A(メジャーまで固定)
+**矛盾チェック**：矛盾なし
+**AI応答**：「回答確認。矛盾なし。NFR要件成果物を生成：nfr-requirements.md, tech-stack-decisions.md」
+**コンテキスト**：CONSTRUCTION - NFR要件（UNIT-03: TUI Application）
+
+---
+
+## CONSTRUCTION - NFR要件（UNIT-03）- 承認
+
+**タイムスタンプ**：2026-04-04T11:10:00Z
+**ユーザー入力**：「コード生成に進んでください。続けてください。」
+**AI応答**：「NFR要件を承認済みとして記録。コード生成（UNIT-03）パート1プランニングに進む。」
+**ステータス**：承認済み
+**コンテキスト**：CONSTRUCTION - NFR要件（UNIT-03）承認 → コード生成へ移行
+
+---
+
+## CONSTRUCTION - コード生成（UNIT-03）- パート1：プランニング
+
+**タイムスタンプ**：2026-04-04T11:15:00Z
+**ユーザー入力**：（NFR要件承認からの自動移行）
+**AI応答**：「UNIT-03 コード生成計画を作成。14ステップのtui-application-code-generation-plan.mdを生成。承認を待つ。」
+**コンテキスト**：CONSTRUCTION - コード生成（UNIT-03: TUI Application）- パート1プランニング
+
+---
+
+## CONSTRUCTION - コード生成（UNIT-03）- パート2：生成
+
+**タイムスタンプ**：2026-04-04T11:20:00Z
+**ユーザー入力**：「コード生成に進んでください」
+**AI応答**：「UNIT-03 コード生成パート2を実行。全14ステップ完了。生成ファイル：`lazygitlab/tui/__init__.py`, `lazygitlab/tui/entities.py`, `lazygitlab/tui/messages.py`, `lazygitlab/tui/styles.tcss`, `lazygitlab/tui/screens/error_dialog.py`, `lazygitlab/tui/screens/help_screen.py`, `lazygitlab/tui/screens/comment_dialog.py`, `lazygitlab/tui/widgets/mr_list_panel.py`, `lazygitlab/tui/widgets/content_panel.py`, `lazygitlab/tui/app.py`, テスト2ファイル, `aidlc-docs/construction/tui-application/code/code-summary.md`。`lazygitlab/__main__.py`のインポートパスを更新。」
+**コンテキスト**：CONSTRUCTION - コード生成（UNIT-03: TUI Application）- パート2生成完了
+
+---

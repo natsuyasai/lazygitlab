@@ -36,9 +36,7 @@ def main() -> None:
         logger = get_logger(__name__)
         logger.info("lazygitlab starting")
 
-        # TUIアプリケーションのエントリーポイント(UNIT-03で実装)
-        # プレースホルダー: アプリのインポートと起動
-        from lazygitlab.app import LazyGitLabApp
+        from lazygitlab.tui.app import LazyGitLabApp
 
         app = LazyGitLabApp(config=config, initial_mr_id=args.mr_id)
         app.run()

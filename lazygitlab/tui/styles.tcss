@@ -1,0 +1,87 @@
+/* lazygitlab TUI スタイル */
+
+/* メインレイアウト */
+#main-container {
+    layout: horizontal;
+    height: 100%;
+}
+
+/* 左ペイン */
+MRListPanel {
+    width: 30%;
+    height: 100%;
+    border-right: tall $primary;
+}
+
+MRListPanel.-hidden {
+    display: none;
+}
+
+/* 右ペイン */
+ContentPanel {
+    width: 1fr;
+    height: 100%;
+}
+
+/* 差分表示の色 */
+.diff-add {
+    background: #1a3a1a;
+    color: #88cc88;
+}
+
+.diff-remove {
+    background: #3a1a1a;
+    color: #cc8888;
+}
+
+.diff-hunk {
+    color: #6688cc;
+    text-style: bold;
+}
+
+.diff-selected-line {
+    background: $accent;
+}
+
+/* インラインコメントマーカー */
+.comment-marker {
+    color: $warning;
+}
+
+/* CommentDialog */
+CommentDialog {
+    width: 80%;
+    height: 60%;
+    align: center middle;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+/* HelpScreen */
+HelpScreen {
+    width: 70%;
+    height: 80%;
+    align: center middle;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+/* ErrorDialog */
+ErrorDialog {
+    width: 60%;
+    height: auto;
+    max-height: 50%;
+    align: center middle;
+    background: $surface;
+    border: thick $error;
+    padding: 1 2;
+}
+
+/* 空コンテンツのヒント */
+#empty-hint {
+    content-align: center middle;
+    height: 100%;
+    color: $text-muted;
+}
