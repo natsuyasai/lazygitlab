@@ -70,11 +70,18 @@ class TestMRServiceLoad:
         assert svc._current_user_id == 10
 
 
+def _make_mr_list(*mrs) -> MagicMock:
+    """python-gitlabのRESTリストオブジェクトをモックする。_next_url属性を持つ。"""
+    mock_list = MagicMock()
+    mock_list.__iter__ = MagicMock(return_value=iter(list(mrs)))
+    mock_list._next_url = None
+    return mock_list
+
+
 class TestGetAssignedToMe:
     async def test_returns_paginated_result(self, service: MRService) -> None:
         mr = _make_mr(iid=1, assignee_username="me", assignee_id=10)
-        mock_list = [mr]
-        mock_list._next_url = None  # type: ignore[attr-defined]
+        mock_list = _make_mr_list(mr)
         with patch("asyncio.to_thread", new=AsyncMock(return_value=mock_list)):
             result = await service.get_assigned_to_me()
         assert isinstance(result, PaginatedResult)
@@ -87,8 +94,7 @@ class TestGetAssignedToOthers:
     async def test_excludes_current_user(self, service: MRService) -> None:
         mr_me = _make_mr(iid=1, assignee_username="me", assignee_id=10)
         mr_other = _make_mr(iid=2, assignee_username="bob", assignee_id=20)
-        mock_list = [mr_me, mr_other]
-        mock_list._next_url = None  # type: ignore[attr-defined]
+        mock_list = _make_mr_list(mr_me, mr_other)
         with patch("asyncio.to_thread", new=AsyncMock(return_value=mock_list)):
             result = await service.get_assigned_to_others()
         assert len(result.items) == 1

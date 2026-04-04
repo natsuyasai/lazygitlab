@@ -336,3 +336,23 @@
 **コンテキスト**：CONSTRUCTION - コード生成（UNIT-03: TUI Application）- パート2生成完了
 
 ---
+
+## CONSTRUCTION - コード生成（UNIT-03）- 承認
+
+**タイムスタンプ**：2026-04-04T11:25:00Z
+**ユーザー入力**：「承認します。次に進んでください」
+**AI応答**：「UNIT-03 コード生成を承認済みとして記録。ビルドとテストフェーズに進む。」
+**ステータス**：承認済み
+**コンテキスト**：CONSTRUCTION - コード生成（UNIT-03）承認 → ビルドとテストへ移行
+
+---
+
+## CONSTRUCTION - ビルドとテスト
+
+**タイムスタンプ**：2026-04-04T11:30:00Z
+**ユーザー入力**：（コード生成承認からの自動移行）
+**AI応答**：「ビルドとテストフェーズ実行。ruff lint: All checks passed。pytest: 185件全Pass（UNIT-01: 95件、UNIT-02: 62件、UNIT-03エンティティ: 23件、UNIT-03 Pilot: 5件）。修正内容: (1) test_mr_service.pyのlist._next_url → MagicMockに修正、(2) app.pyのHorizontalインポートをtextual.containersに修正、(3) GitRepoDetector呼び出しをdetect(config)に修正、(4) test_pilot.pyのErrorDialogテストを独立App経由に修正。」
+**ステータス**：完了
+**コンテキスト**：CONSTRUCTION - ビルドとテスト完了
+
+---

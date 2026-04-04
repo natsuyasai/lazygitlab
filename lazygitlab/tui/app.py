@@ -8,8 +8,10 @@ from typing import ClassVar
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Horizontal
 from textual.widgets import Footer, Header
 
+from lazygitlab.infrastructure.git_detector import GitRepoDetector
 from lazygitlab.infrastructure.logger import get_logger
 from lazygitlab.models import AppConfig
 from lazygitlab.services import CommentService, GitLabClient, MRService
@@ -50,11 +52,8 @@ class LazyGitLabApp(App):
         yield Header()
         # ウィジェットは on_mount で初期化後に置き換えるため、
         # プレースホルダーとして空の状態でマウントする
-        from textual.widgets import Horizontal
-
         with Horizontal(id="main-container"):
-            yield MRListPanel.__new__(MRListPanel)  # ダミー（on_mountで再生成）
-            yield ContentPanel.__new__(ContentPanel)  # ダミー（on_mountで再生成）
+            pass
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -63,10 +62,8 @@ class LazyGitLabApp(App):
         self.sub_title = "Connecting..."
 
         try:
-            from lazygitlab.infrastructure.git_detector import GitRepoDetector
-
-            detector = GitRepoDetector(remote_name=self._config.remote_name)
-            project_info = detector.get_project_info()
+            detector = GitRepoDetector()
+            project_info = detector.detect(self._config)
             project_path = project_info.project_path
 
             self._client = GitLabClient(self._config)

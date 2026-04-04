@@ -43,12 +43,12 @@
 
 ### CONSTRUCTION PHASE
 
-- [ ] 機能設計 - EXECUTE（ユニットごと）
-- [ ] NFR要件 - EXECUTE（ユニットごと）
+- [x] 機能設計 - EXECUTE（ユニットごと）
+- [x] NFR要件 - EXECUTE（ユニットごと）
 - [ ] NFR設計 - SKIP
 - [ ] インフラストラクチャ設計 - SKIP
-- [ ] コード生成 - EXECUTE（ユニットごと）
-- [ ] ビルドとテスト - EXECUTE
+- [x] コード生成 - EXECUTE（ユニットごと）
+- [x] ビルドとテスト - EXECUTE
 
 ### OPERATIONS PHASE
 
@@ -57,6 +57,6 @@
 ## 現在のステータス
 
 - **ライフサイクルフェーズ**：CONSTRUCTION
-- **現在のステージ**：コード生成（UNIT-03: TUI Application）
-- **次のステージ**：ビルドとテスト
-- **ステータス**：UNIT-03 コード生成 — 生成完了、承認待ち
+- **現在のステージ**：完了
+- **次のステージ**：OPERATIONS PHASE（プレースホルダー）
+- **ステータス**：CONSTRUCTION PHASE 完了

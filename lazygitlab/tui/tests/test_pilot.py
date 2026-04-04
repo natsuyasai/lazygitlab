@@ -161,15 +161,20 @@ async def test_error_dialog_shows_on_connection_failure():
 
 @pytest.mark.asyncio
 async def test_error_dialog_dismiss():
-    """ErrorDialogが表示され、OKボタンで閉じることができることを確認する。"""
+    """ErrorDialogが表示され、Enterキーで閉じることができることを確認する。"""
+    from textual.app import App, ComposeResult
+    from textual.widgets import Label
 
-    # ErrorDialog をスタンドアロンでテストする方式
-    class _TestApp(LazyGitLabApp):
+    # Textual の on_mount はMRO全体で呼ばれるため、LazyGitLabAppを継承せず
+    # 独立した App クラスでテストする
+    class _TestApp(App):
+        def compose(self) -> ComposeResult:
+            yield Label("base")
+
         async def on_mount(self) -> None:
             await self.push_screen(ErrorDialog("Test error message"))
 
-    config = _make_config()
-    test_app = _TestApp(config=config)
+    test_app = _TestApp()
     async with test_app.run_test() as pilot:
         assert isinstance(test_app.screen, ErrorDialog)
         await pilot.press("enter")
