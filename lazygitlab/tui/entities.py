@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 from lazygitlab.services.types import MRCategory
@@ -55,7 +55,9 @@ CATEGORY_LABELS: dict[MRCategory, str] = {
 }
 
 
-def get_file_change_label(old_path: str, new_path: str, new_file: bool, deleted_file: bool, renamed_file: bool) -> str:
+def get_file_change_label(
+    old_path: str, new_path: str, new_file: bool, deleted_file: bool, renamed_file: bool
+) -> str:
     """FileChange の表示ラベルを生成する。"""
     if new_file:
         return f"+ {new_path}"

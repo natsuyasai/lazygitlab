@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
+from lazygitlab.models import Discussion, Note, NotePosition
 from lazygitlab.services.types import MRCategory
 from lazygitlab.tui.entities import (
     CATEGORY_LABELS,
@@ -14,7 +13,6 @@ from lazygitlab.tui.entities import (
     get_file_change_label,
 )
 from lazygitlab.tui.widgets.content_panel import _format_diff_line, _get_comment_lines
-from lazygitlab.models import Discussion, Note, NotePosition
 
 
 class TestDiffViewMode:
@@ -24,12 +22,16 @@ class TestDiffViewMode:
 
     def test_toggle_logic(self) -> None:
         mode = DiffViewMode.UNIFIED
-        toggled = DiffViewMode.SIDE_BY_SIDE if mode == DiffViewMode.UNIFIED else DiffViewMode.UNIFIED
+        toggled = (
+            DiffViewMode.SIDE_BY_SIDE if mode == DiffViewMode.UNIFIED else DiffViewMode.UNIFIED
+        )
         assert toggled == DiffViewMode.SIDE_BY_SIDE
 
     def test_toggle_back(self) -> None:
         mode = DiffViewMode.SIDE_BY_SIDE
-        toggled = DiffViewMode.SIDE_BY_SIDE if mode == DiffViewMode.UNIFIED else DiffViewMode.UNIFIED
+        toggled = (
+            DiffViewMode.SIDE_BY_SIDE if mode == DiffViewMode.UNIFIED else DiffViewMode.UNIFIED
+        )
         assert toggled == DiffViewMode.UNIFIED
 
 

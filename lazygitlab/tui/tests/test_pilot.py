@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from lazygitlab.models import AppConfig
-from lazygitlab.services.types import MRCategory, PaginatedResult
+from lazygitlab.services.types import PaginatedResult
 from lazygitlab.tui.app import LazyGitLabApp
 from lazygitlab.tui.screens.error_dialog import ErrorDialog
 from lazygitlab.tui.screens.help_screen import HelpScreen
@@ -144,9 +144,7 @@ async def test_error_dialog_shows_on_connection_failure():
         patch("lazygitlab.tui.app.GitRepoDetector") as mock_detector_cls,
     ):
         mock_client = MagicMock()
-        mock_client.connect = AsyncMock(
-            side_effect=GitLabConnectionError("Connection failed")
-        )
+        mock_client.connect = AsyncMock(side_effect=GitLabConnectionError("Connection failed"))
         mock_client_cls.return_value = mock_client
 
         mock_detector = MagicMock()

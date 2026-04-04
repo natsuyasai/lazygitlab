@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 
 from textual.app import ComposeResult
+from textual.widget import Widget
 from textual.widgets import Tree
 from textual.widgets._tree import TreeNode
-from textual.widget import Widget
 
 from lazygitlab.infrastructure.logger import get_logger
 from lazygitlab.services import MRService
@@ -15,7 +15,6 @@ from lazygitlab.services.exceptions import LazyGitLabAPIError
 from lazygitlab.services.types import MRCategory
 from lazygitlab.tui.entities import (
     CATEGORY_LABELS,
-    ContentViewState,
     TreeNodeData,
     TreeNodeType,
     get_file_change_label,
@@ -39,7 +38,7 @@ class MRListPanel(Widget):
     def __init__(self, mr_service: MRService) -> None:
         super().__init__()
         self._mr_service = mr_service
-        self._category_pages: dict[MRCategory, int] = {cat: 1 for cat in MRCategory}
+        self._category_pages: dict[MRCategory, int] = dict.fromkeys(MRCategory, 1)
         self._selected_mr_iid: int | None = None
         self._expanded_mrs: set[int] = set()
         # カテゴリノードへの参照を保持
@@ -243,5 +242,5 @@ class MRListPanel(Widget):
         tree.root.remove_children()
         self._category_nodes.clear()
         self._expanded_mrs.clear()
-        self._category_pages = {cat: 1 for cat in MRCategory}
+        self._category_pages = dict.fromkeys(MRCategory, 1)
         await self._load_all_categories()

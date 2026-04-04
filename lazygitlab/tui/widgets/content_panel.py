@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from pygments.lexers import get_lexer_for_filename
-from pygments.lexers.special import TextLexer
-from pygments.token import Token
-from pygments.util import ClassNotFound
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
@@ -59,8 +55,8 @@ def _build_overview_text(mr_detail, discussions: list[Discussion]) -> str:
     lines: list[str] = []
     lines.append(f"# !{mr_detail.iid} {mr_detail.title}")
     lines.append("")
-    lines.append(f"| Field      | Value                          |")
-    lines.append(f"|------------|-------------------------------|")
+    lines.append("| Field      | Value                          |")
+    lines.append("|------------|-------------------------------|")
     lines.append(f"| Author     | {mr_detail.author}            |")
     lines.append(f"| Assignee   | {mr_detail.assignee or '—'}   |")
     lines.append(f"| Status     | {mr_detail.status}            |")
@@ -219,6 +215,7 @@ class ContentPanel(Widget):
             # ハンクヘッダーから行番号を解析する
             if line.startswith("@@"):
                 import re
+
                 m = re.search(r"\+(\d+)", line)
                 if m:
                     hunk_new_start = int(m.group(1))
@@ -340,13 +337,12 @@ def _flush_side_by_side(log: RichLog, old_lines: list[str], new_lines: list[str]
         right = new_lines[i] if i < len(new_lines) else ""
         left_fmt = left.replace("[", r"\[")
         right_fmt = right.replace("[", r"\[")
-        log.write(
-            f"[{_DIFF_REMOVE_STYLE}]{left_fmt:<50}[/]  [{_DIFF_ADD_STYLE}]{right_fmt}[/]"
-        )
+        log.write(f"[{_DIFF_REMOVE_STYLE}]{left_fmt:<50}[/]  [{_DIFF_ADD_STYLE}]{right_fmt}[/]")
 
 
 async def _gather_two(coro1, coro2):
     """2つのコルーチンを並行実行して結果のタプルを返す。"""
     import asyncio
+
     result1, result2 = await asyncio.gather(coro1, coro2)
     return result1, result2

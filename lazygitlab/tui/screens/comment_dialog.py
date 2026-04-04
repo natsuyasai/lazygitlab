@@ -140,9 +140,7 @@ class CommentDialog(ModalScreen[None]):
             new_text = tmp_path.read_text(encoding="utf-8")
             text_area.load_text(new_text)
         except FileNotFoundError:
-            await self.app.push_screen(
-                ErrorDialog(f"Editor not found: {self._editor_command}")
-            )
+            await self.app.push_screen(ErrorDialog(f"Editor not found: {self._editor_command}"))
         except Exception as exc:
             _logger.error("External editor error: %s", exc)
             await self.app.push_screen(ErrorDialog(f"Editor error: {exc}"))

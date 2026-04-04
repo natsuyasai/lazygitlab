@@ -7,7 +7,6 @@ from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Label
 
-
 _KEYBINDINGS: list[tuple[str, str, str]] = [
     # (category, key, action)
     ("Global", "q", "Quit"),
