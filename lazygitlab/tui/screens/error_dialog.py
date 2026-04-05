@@ -6,6 +6,7 @@ from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label
 
@@ -23,8 +24,9 @@ class ErrorDialog(ModalScreen[None]):
         self._error_message = error_message
 
     def compose(self) -> ComposeResult:
-        yield Label(f"[bold red]Error[/bold red]\n\n{self._error_message}", id="error-message")
-        yield Button("OK", variant="error", id="ok-button")
+        with Vertical(id="error-container"):
+            yield Label(f"[bold red]Error[/bold red]\n\n{self._error_message}", id="error-message")
+            yield Button("OK", variant="error", id="ok-button")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "ok-button":

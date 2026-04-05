@@ -50,9 +50,12 @@ ContentPanel {
 
 /* CommentDialog */
 CommentDialog {
+    align: center middle;
+}
+
+#dialog-container {
     width: 80%;
     height: 60%;
-    align: center middle;
     background: $surface;
     border: thick $primary;
     padding: 1 2;
@@ -60,9 +63,12 @@ CommentDialog {
 
 /* HelpScreen */
 HelpScreen {
+    align: center middle;
+}
+
+#help-container {
     width: 70%;
     height: 80%;
-    align: center middle;
     background: $surface;
     border: thick $primary;
     padding: 1 2;
@@ -70,10 +76,13 @@ HelpScreen {
 
 /* ErrorDialog */
 ErrorDialog {
+    align: center middle;
+}
+
+#error-container {
     width: 60%;
     height: auto;
     max-height: 50%;
-    align: center middle;
     background: $surface;
     border: thick $error;
     padding: 1 2;

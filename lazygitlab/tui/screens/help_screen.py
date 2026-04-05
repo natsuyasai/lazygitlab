@@ -6,6 +6,7 @@ from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Label
 
@@ -37,9 +38,10 @@ class HelpScreen(ModalScreen[None]):
     ]
 
     def compose(self) -> ComposeResult:
-        yield Label("[bold]Keybindings[/bold]", id="help-title")
-        table = DataTable(id="keybindings-table")
-        yield table
+        with Vertical(id="help-container"):
+            yield Label("[bold]Keybindings[/bold]", id="help-title")
+            table = DataTable(id="keybindings-table")
+            yield table
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
