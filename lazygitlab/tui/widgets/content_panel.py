@@ -287,7 +287,10 @@ class ContentPanel(Widget):
             self._comment_lines = _get_comment_lines(discussions)
             self._render_diff(file_diff.diff, file_path)
             self._view_state = ContentViewState.DIFF
-            table.focus()
+            if self._diff_mode == DiffViewMode.UNIFIED:
+                table.focus()
+            else:
+                self.query_one("#diff-table-left", DataTable).focus()
         except LazyGitLabAPIError as exc:
             _logger.error("Failed to load diff for !%d %s: %s", mr_iid, file_path, exc.message)
             self._view_state = ContentViewState.ERROR
@@ -327,11 +330,15 @@ class ContentPanel(Widget):
             table.add_column("Content", key="content")
             self._render_unified_table(table, diff_text)
         else:
-            table.add_column("Old#", key="old_no", width=5)
-            table.add_column("Old", key="old_content")
-            table.add_column("New#", key="new_no", width=5)
-            table.add_column("New", key="new_content")
-            self._render_side_by_side_table(table, diff_text)
+            left = self.query_one("#diff-table-left", DataTable)
+            right = self.query_one("#diff-table-right", DataTable)
+            left.clear(columns=True)
+            right.clear(columns=True)
+            left.add_column("Old#", key="old_no", width=5)
+            left.add_column("Old", key="old_content")
+            right.add_column("New#", key="new_no", width=5)
+            right.add_column("New", key="new_content")
+            self._render_sbs_tables(left, right, diff_text)
 
     def _content_cell(self, text: str, style: str = "") -> Text:
         """折り返しモードに応じてコンテンツセル用 Text を返す。"""
@@ -396,27 +403,37 @@ class ContentPanel(Widget):
                 self._diff_row_lines.append(new_n)
             row_idx += 1
 
-    def _render_side_by_side_table(self, table: DataTable, diff_text: str) -> None:
-        """side-by-side diff を DataTable に描画する。"""
+    def _render_sbs_tables(
+        self, left: DataTable, right: DataTable, diff_text: str
+    ) -> None:
+        """side-by-side の左右テーブルを同時に描画する。
+        diff_text を1回だけ解析し、左右に同数の行を追加することで
+        カーソル同期が正しく機能することを保証する。
+        """
         parsed = _parse_diff(diff_text)
         rows = _apply_context_filter(parsed, _CONTEXT_LINES)
         row_idx = 0
 
-        pending_rem: list[tuple[int, str]] = []
-        pending_add: list[tuple[int, str]] = []
+        pending_rem: list[tuple[int | None, str]] = []
+        pending_add: list[tuple[int | None, str]] = []
 
         def _flush() -> None:
             nonlocal row_idx
+            if not pending_rem and not pending_add:
+                return
             max_len = max(len(pending_rem), len(pending_add))
             for k in range(max_len):
                 old_n2, old_t = pending_rem[k] if k < len(pending_rem) else (None, "")
                 new_n2, new_t = pending_add[k] if k < len(pending_add) else (None, "")
-                table.add_row(
+                left.add_row(
                     Text(str(old_n2) if old_n2 else "", style=_DIFF_REM_STYLE if old_t else ""),
-                    Text(old_t, style=_DIFF_REM_STYLE if old_t else ""),
+                    self._content_cell(old_t, _DIFF_REM_STYLE if old_t else ""),
+                    key=f"sbs_l_{row_idx}",
+                )
+                right.add_row(
                     Text(str(new_n2) if new_n2 else "", style=_DIFF_ADD_STYLE if new_t else ""),
-                    Text(new_t, style=_DIFF_ADD_STYLE if new_t else ""),
-                    key=f"sbs_{row_idx}",
+                    self._content_cell(new_t, _DIFF_ADD_STYLE if new_t else ""),
+                    key=f"sbs_r_{row_idx}",
                 )
                 self._diff_row_lines.append(new_n2)
                 row_idx += 1
@@ -431,34 +448,44 @@ class ContentPanel(Widget):
             else:
                 _flush()
                 if t == "gap":
-                    table.add_row(
+                    left.add_row(
                         Text("···", style=_DIFF_GAP_STYLE),
-                        Text(text, style=_DIFF_GAP_STYLE),
+                        self._content_cell(text, _DIFF_GAP_STYLE),
+                        key=f"gap_l_{row_idx}",
+                    )
+                    right.add_row(
                         Text("···", style=_DIFF_GAP_STYLE),
-                        Text("", style=_DIFF_GAP_STYLE),
-                        key=f"gap_{row_idx}",
+                        self._content_cell(text, _DIFF_GAP_STYLE),
+                        key=f"gap_r_{row_idx}",
                     )
                     self._diff_row_lines.append(None)
                 elif t == "hunk":
-                    table.add_row(
+                    left.add_row(
                         Text("", style=_DIFF_HUNK_STYLE),
-                        Text(text, style=_DIFF_HUNK_STYLE),
+                        self._content_cell(text, _DIFF_HUNK_STYLE),
+                        key=f"hunk_l_{row_idx}",
+                    )
+                    right.add_row(
                         Text("", style=_DIFF_HUNK_STYLE),
-                        Text("", style=_DIFF_HUNK_STYLE),
-                        key=f"hunk_{row_idx}",
+                        self._content_cell(text, _DIFF_HUNK_STYLE),
+                        key=f"hunk_r_{row_idx}",
                     )
                     self._diff_row_lines.append(None)
                 elif t == "header":
-                    table.add_row("", Text(text, style="dim"), "", "", key=f"hdr_{row_idx}")
+                    left.add_row("", self._content_cell(text, "dim"), key=f"hdr_l_{row_idx}")
+                    right.add_row("", self._content_cell(text, "dim"), key=f"hdr_r_{row_idx}")
                     self._diff_row_lines.append(None)
                 else:  # ctx
                     ctx_text = text[1:] if text.startswith(" ") else text
-                    table.add_row(
+                    left.add_row(
                         str(old_n) if old_n is not None else "",
-                        Text(ctx_text),
+                        self._content_cell(ctx_text),
+                        key=f"ctx_l_{row_idx}",
+                    )
+                    right.add_row(
                         str(new_n) if new_n is not None else "",
-                        Text(ctx_text),
-                        key=f"ctx_{row_idx}",
+                        self._content_cell(ctx_text),
+                        key=f"ctx_r_{row_idx}",
                     )
                     self._diff_row_lines.append(new_n)
                 row_idx += 1

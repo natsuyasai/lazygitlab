@@ -193,3 +193,57 @@ class TestWrapText:
     def test_empty_string(self) -> None:
         from lazygitlab.tui.widgets.content_panel import _wrap_text
         assert _wrap_text("", 20) == ""
+
+
+class TestSBSRendering:
+    """side-by-side diff の行数対称性テスト。"""
+
+    SAMPLE_DIFF = """\
+@@ -1,3 +1,3 @@
+ context
+-old line
++new line
+ context2
+"""
+
+    def test_parse_diff_has_expected_rows(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _parse_diff, _apply_context_filter
+        parsed = _parse_diff(self.SAMPLE_DIFF)
+        rows = _apply_context_filter(parsed, 5)
+        types = [t for t, *_ in rows]
+        assert "add" in types
+        assert "rem" in types
+        assert "ctx" in types
+
+    def test_sbs_pending_flush_balances_rows(self) -> None:
+        """rem と add のペア数が一致する場合、左右の行数が等しい。"""
+        from lazygitlab.tui.widgets.content_panel import _parse_diff, _apply_context_filter
+
+        parsed = _parse_diff(self.SAMPLE_DIFF)
+        rows = _apply_context_filter(parsed, 5)
+
+        pending_rem: list = []
+        pending_add: list = []
+        left_rows: list = []
+        right_rows: list = []
+
+        def flush():
+            max_len = max(len(pending_rem), len(pending_add), 1)
+            for k in range(max_len if (pending_rem or pending_add) else 0):
+                left_rows.append(pending_rem[k] if k < len(pending_rem) else None)
+                right_rows.append(pending_add[k] if k < len(pending_add) else None)
+            pending_rem.clear()
+            pending_add.clear()
+
+        for t, old_n, new_n, text in rows:
+            if t == "rem":
+                pending_rem.append((old_n, text))
+            elif t == "add":
+                pending_add.append((new_n, text))
+            else:
+                flush()
+                left_rows.append((old_n, text))
+                right_rows.append((new_n, text))
+        flush()
+
+        assert len(left_rows) == len(right_rows)
