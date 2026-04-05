@@ -322,7 +322,6 @@ class ContentPanel(Widget):
         """差分テキストを DataTable にレンダリングする。"""
         table = self.query_one("#diff-table", DataTable)
         table.clear(columns=True)
-        self._diff_row_lines = []
 
         if self._diff_mode == DiffViewMode.UNIFIED:
             table.add_column("Old", key="old_no", width=5)

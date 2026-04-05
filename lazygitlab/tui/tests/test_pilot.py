@@ -208,47 +208,43 @@ def test_content_panel_wrap_lines_default():
     assert panel._wrap_lines is False
 
 
-@pytest.mark.asyncio
-async def test_comment_dialog_has_container():
+def test_comment_dialog_has_container():
     """CommentDialog が #dialog-container Vertical ウィジェットを持つことを確認する。"""
-    from textual.app import App, ComposeResult
-    from textual.containers import Vertical
-    from textual.widgets import Label
-
+    import inspect
     from lazygitlab.models import CommentContext, CommentType
     from lazygitlab.tui.screens.comment_dialog import CommentDialog
 
     context = CommentContext(mr_iid=1, comment_type=CommentType.NOTE)
     dialog = CommentDialog(context, MagicMock(), "vi")
 
-    # Create a minimal app just for widget tree verification
-    class _WidgetApp(App):
-        dialog_to_check: CommentDialog
-        found_container: bool = False
+    # Verify the compose method exists and can be called
+    assert hasattr(dialog, 'compose')
+    assert callable(dialog.compose)
 
+    # Verify the source code contains the expected dialog-container ID
+    source = inspect.getsource(dialog.compose)
+    assert 'dialog-container' in source
+    assert 'Vertical' in source
+
+
+@pytest.mark.asyncio
+async def test_content_panel_has_sbs_datatable_widgets():
+    """ContentPanel が #diff-table-left と #diff-table-right DataTable を持つことを確認する。"""
+    from textual.app import App, ComposeResult
+    from textual.widgets import DataTable
+
+    from lazygitlab.tui.widgets.content_panel import ContentPanel
+
+    class _TestApp(App):
         def compose(self) -> ComposeResult:
-            yield Label("placeholder")
+            yield ContentPanel(MagicMock(), MagicMock())
 
-    # Set the dialog on the app class for verification
-    _WidgetApp.dialog_to_check = dialog
-
-    app = _WidgetApp()
-    async with app.run_test() as pilot:
-        # Instead of push_screen, directly verify the dialog's compose output
-        # by collecting widgets in the active app context
-        try:
-            widgets = list(dialog.compose())
-            # Find the Vertical container with id="dialog-container"
-            container = None
-            for widget in widgets:
-                if isinstance(widget, Vertical) and widget.id == "dialog-container":
-                    container = widget
-                    break
-            assert container is not None, "dialog-container not found in compose() output"
-        except Exception:
-            # If compose requires app context, query from within mounted dialog
-            # This fallback ensures we test runtime widget tree checking
-            pass
+    test_app = _TestApp()
+    async with test_app.run_test() as pilot:
+        left = test_app.query_one("#diff-table-left", DataTable)
+        right = test_app.query_one("#diff-table-right", DataTable)
+        assert left is not None
+        assert right is not None
 
 
 def test_content_panel_has_required_bindings():
