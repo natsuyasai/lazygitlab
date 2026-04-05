@@ -182,22 +182,18 @@ async def test_error_dialog_dismiss():
         assert not isinstance(test_app.screen, ErrorDialog)
 
 
-@pytest.mark.asyncio
-async def test_c_key_binding_has_priority():
+def test_c_key_binding_has_priority():
     """ContentPanel の c バインディングが priority=True であることを確認する。"""
     from lazygitlab.tui.widgets.content_panel import ContentPanel
-    from textual.binding import Binding
 
     bindings = {b.key: b for b in ContentPanel.BINDINGS}
     assert "c" in bindings
     assert bindings["c"].priority is True
 
 
-@pytest.mark.asyncio
-async def test_e_key_binding_has_priority():
+def test_e_key_binding_has_priority():
     """App の e バインディングが priority=True であることを確認する。"""
     from lazygitlab.tui.app import LazyGitLabApp
-    from textual.binding import Binding
 
     bindings = {b.key: b for b in LazyGitLabApp.BINDINGS}
     assert "e" in bindings
