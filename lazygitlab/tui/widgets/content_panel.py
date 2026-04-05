@@ -37,6 +37,13 @@ _CONTEXT_LINES = 5
 # 行番号列の幅（💬マーカー(2セル) + 最大4桁 = 6、余裕を持たせ7）
 _LINE_NO_WIDTH = 7
 
+# top/bottom ロード行のギャップ範囲センチネル値
+_TOP_LOAD_SENTINEL = (-1, -1)
+_BOTTOM_LOAD_SENTINEL = (-2, -2)
+
+# 一度に追加読み込みする行数
+_LOAD_MORE_LINES = 10
+
 
 def _format_diff_line(line: str) -> str:
     """差分の1行を Rich マークアップでフォーマットする（テスト用に保持）。"""
@@ -183,6 +190,19 @@ def _apply_context_filter(
     return result
 
 
+def _find_first_last_new_line(
+    parsed: list[tuple[str, int | None, int | None, str]],
+) -> tuple[int, int]:
+    """パース済み diff の新ファイル側の最初と最後の行番号を返す (0 = 未検出)。"""
+    first = last = 0
+    for _, _, new_n, _ in parsed:
+        if new_n is not None:
+            if first == 0:
+                first = new_n
+            last = new_n
+    return first, last
+
+
 def _wrap_text(text: str, width: int) -> str:
     """テキストを指定幅で折り返す（コード向け文字単位）。"""
     if len(text) <= width:
@@ -228,6 +248,12 @@ class ContentPanel(Widget):
         self._full_parsed_diff: list[tuple[str, int | None, int | None, str]] = []
         self._forced_ctx_indices: set[int] = set()
         self._gap_row_ranges: dict[int, tuple[int, int]] = {}
+        # ファイル上下追加読み込み用
+        self._file_content: list[str] = []
+        self._top_extra_count: int = 0
+        self._bottom_extra_count: int = 0
+        self._first_diff_new_line: int = 0
+        self._last_diff_new_line: int = 0
         # SBS スクロール同期用
         self._syncing_scroll_x: bool = False
 
@@ -317,17 +343,24 @@ class ContentPanel(Widget):
                 _logger.debug(f"Failed to sync cursor in SBS mode: {e}")
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """行選択時: ギャップ行ならコンテキスト展開、コメント行ならコメント表示。"""
+        """行選択 (Enter) 時の処理。
+        - ギャップ行: コンテキスト展開または上下追加読み込み
+        - コメント行: コメント閲覧ダイアログ表示
+        """
         if self._view_state != ContentViewState.DIFF:
             return
         row_idx = event.cursor_row
 
-        # ギャップ行: コンテキストを展開して再描画
         if row_idx in self._gap_row_ranges:
-            self._expand_gap(row_idx)
+            start, _end = self._gap_row_ranges[row_idx]
+            if start == -1:  # top_load
+                self.run_worker(self._load_more_top(), exclusive=True)
+            elif start == -2:  # bottom_load
+                self.run_worker(self._load_more_bottom(), exclusive=True)
+            else:
+                self._expand_gap(row_idx)
             return
 
-        # コメントがある行: コメント閲覧ダイアログを表示
         if 0 <= row_idx < len(self._diff_row_lines):
             line_no = self._diff_row_lines[row_idx]
             if line_no is not None and line_no in self._comment_lines:
@@ -367,6 +400,9 @@ class ContentPanel(Widget):
         self._diff_row_lines = []
         self._selected_line = None
         self._forced_ctx_indices = set()
+        self._file_content = []
+        self._top_extra_count = 0
+        self._bottom_extra_count = 0
         try:
             file_diff, discussions = await _gather_two(
                 self._mr_service.get_mr_diff(mr_iid, file_path),
@@ -376,7 +412,11 @@ class ContentPanel(Widget):
             self._discussions = discussions
             self._comment_map = _build_comment_map(discussions)
             self._current_diff_text = file_diff.diff
-            self._render_diff(file_diff.diff, file_path)
+            self._full_parsed_diff = _parse_diff(file_diff.diff)
+            self._first_diff_new_line, self._last_diff_new_line = _find_first_last_new_line(
+                self._full_parsed_diff
+            )
+            self._render_diff()
             self._view_state = ContentViewState.DIFF
             if self._diff_mode == DiffViewMode.UNIFIED:
                 table.focus()
@@ -388,6 +428,47 @@ class ContentPanel(Widget):
             await self.app.push_screen(ErrorDialog(exc.message))
         finally:
             self.app.sub_title = ""
+
+    async def _fetch_file_content(self) -> None:
+        """ファイル全体の内容を取得して _file_content にキャッシュする。"""
+        if self._current_mr_iid is None or self._current_file_path is None:
+            return
+        try:
+            lines = await self._mr_service.get_file_lines(
+                self._current_mr_iid, self._current_file_path
+            )
+            self._file_content = lines
+            _logger.debug(
+                "Fetched file content: %s (%d lines)", self._current_file_path, len(lines)
+            )
+        except LazyGitLabAPIError as exc:
+            _logger.warning("Failed to fetch file content: %s", exc.message)
+
+    async def _load_more_top(self) -> None:
+        """差分上部に 10 行追加読み込みして再描画する。"""
+        if not self._file_content:
+            await self._fetch_file_content()
+        if not self._file_content:
+            return
+        self._top_extra_count += _LOAD_MORE_LINES
+        self._render_diff()
+        if self._diff_mode == DiffViewMode.UNIFIED:
+            self.query_one("#diff-table", DataTable).focus()
+        else:
+            self.query_one("#diff-table-left", DataTable).focus()
+
+    async def _load_more_bottom(self) -> None:
+        """差分下部に 10 行追加読み込みして再描画する。"""
+        if not self._file_content:
+            await self._fetch_file_content()
+        if not self._file_content:
+            return
+        self._bottom_extra_count += _LOAD_MORE_LINES
+        self._render_diff()
+        if self._diff_mode == DiffViewMode.UNIFIED:
+            self.query_one("#diff-table", DataTable).focus()
+        else:
+            self.query_one("#diff-table-left", DataTable).focus()
 
     # --- 表示切替ヘルパー ---
 
@@ -409,11 +490,74 @@ class ContentPanel(Widget):
 
     # --- 差分レンダラー ---
 
-    def _render_diff(self, diff_text: str, file_path: str) -> None:
-        """差分テキストを DataTable にレンダリングする。"""
+    def _build_augmented_rows(
+        self,
+    ) -> list[tuple[str, int | None, int | None, str]]:
+        """上下追加行・context-filter 済み diff を結合したレンダリング用リストを返す。
+
+        通常の gap エントリの old_n/new_n にはパースリスト内の開始・終了インデックスが入る。
+        top_load/bottom_load エントリの old_n/new_n には各センチネル値を使用。
+        """
+        result: list[tuple[str, int | None, int | None, str]] = []
+
+        # --- 先頭の追加読み込み行 ---
+        if self._first_diff_new_line > 1:
+            top_end_idx = self._first_diff_new_line - 1  # 0-indexed, exclusive
+            if self._file_content and self._top_extra_count > 0:
+                top_start_idx = max(0, top_end_idx - self._top_extra_count)
+                if top_start_idx > 0:
+                    result.append((
+                        "top_load",
+                        _TOP_LOAD_SENTINEL[0],
+                        _TOP_LOAD_SENTINEL[1],
+                        f"··· load {_LOAD_MORE_LINES} more lines above (Enter) ···",
+                    ))
+                for i in range(top_start_idx, top_end_idx):
+                    result.append(("ctx", i + 1, i + 1, " " + self._file_content[i]))
+            else:
+                result.append((
+                    "top_load",
+                    _TOP_LOAD_SENTINEL[0],
+                    _TOP_LOAD_SENTINEL[1],
+                    f"··· load {_LOAD_MORE_LINES} more lines above (Enter) ···",
+                ))
+
+        # --- 通常の diff 行（context フィルタ済み） ---
+        result.extend(
+            _apply_context_filter(
+                self._full_parsed_diff, _CONTEXT_LINES, self._forced_ctx_indices
+            )
+        )
+
+        # --- 末尾の追加読み込み行 ---
+        if self._last_diff_new_line > 0:
+            bottom_start_idx = self._last_diff_new_line  # 0-indexed
+            if self._file_content:
+                bottom_end_idx = min(
+                    bottom_start_idx + self._bottom_extra_count, len(self._file_content)
+                )
+                for i in range(bottom_start_idx, bottom_end_idx):
+                    result.append(("ctx", i + 1, i + 1, " " + self._file_content[i]))
+                has_more = bottom_end_idx < len(self._file_content)
+            else:
+                has_more = True  # ファイル未取得 → まだあると仮定
+
+            if has_more:
+                result.append((
+                    "bottom_load",
+                    _BOTTOM_LOAD_SENTINEL[0],
+                    _BOTTOM_LOAD_SENTINEL[1],
+                    f"··· load {_LOAD_MORE_LINES} more lines below (Enter) ···",
+                ))
+
+        return result
+
+    def _render_diff(self) -> None:
+        """現在の状態で差分を DataTable にレンダリングする（ネットワークアクセスなし）。"""
         self._diff_row_lines = []
         self._gap_row_ranges = {}
-        self._full_parsed_diff = _parse_diff(diff_text)
+        rows = self._build_augmented_rows()
+
         table = self.query_one("#diff-table", DataTable)
         table.clear(columns=True)
 
@@ -421,7 +565,7 @@ class ContentPanel(Widget):
             table.add_column("Old", key="old_no", width=5)
             table.add_column("New", key="new_no", width=_LINE_NO_WIDTH)
             table.add_column("Content", key="content")
-            self._render_unified_table(table, self._full_parsed_diff)
+            self._render_unified_table(table, rows)
         else:
             left = self.query_one("#diff-table-left", DataTable)
             right = self.query_one("#diff-table-right", DataTable)
@@ -431,12 +575,11 @@ class ContentPanel(Widget):
             left.add_column("Old", key="old_content")
             right.add_column("New#", key="new_no", width=_LINE_NO_WIDTH)
             right.add_column("New", key="new_content")
-            self._render_sbs_tables(left, right, self._full_parsed_diff)
+            self._render_sbs_tables(left, right, rows)
 
     def _content_cell(self, text: str, style: str = "") -> Text:
         """折り返しモードに応じてコンテンツセル用 Text を返す。"""
         if self._wrap_lines:
-            # パネル幅から行番号列2本(各7文字)+余白を引いた幅
             wrap_width = max(40, self.size.width - 20)
             text = _wrap_text(text, wrap_width)
             return Text(text, style=style)
@@ -449,16 +592,14 @@ class ContentPanel(Widget):
     def _render_unified_table(
         self,
         table: DataTable,
-        parsed: list[tuple[str, int | None, int | None, str]],
+        rows: list[tuple[str, int | None, int | None, str]],
     ) -> None:
-        """unified diff を DataTable に描画する（±コンテキスト行フィルタ付き）。"""
-        rows = _apply_context_filter(parsed, _CONTEXT_LINES, self._forced_ctx_indices)
+        """unified diff の行リストを DataTable に描画する。"""
         row_idx = 0
         row_height = self._row_height()
 
         for t, old_n, new_n, text in rows:
-            if t == "gap":
-                # old_n / new_n はギャップの parsed リスト内の開始・終了インデックス
+            if t in ("gap", "top_load", "bottom_load"):
                 self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                 table.add_row(
                     Text("···", style=_DIFF_GAP_STYLE),
@@ -479,7 +620,8 @@ class ContentPanel(Widget):
                 self._diff_row_lines.append(None)
             elif t == "header":
                 table.add_row(
-                    "", "", self._content_cell(text, "dim"), key=f"hdr_{row_idx}", height=row_height
+                    "", "", self._content_cell(text, "dim"), key=f"hdr_{row_idx}",
+                    height=row_height,
                 )
                 self._diff_row_lines.append(None)
             elif t == "add":
@@ -520,10 +662,9 @@ class ContentPanel(Widget):
         self,
         left: DataTable,
         right: DataTable,
-        parsed: list[tuple[str, int | None, int | None, str]],
+        rows: list[tuple[str, int | None, int | None, str]],
     ) -> None:
         """side-by-side の左右テーブルを同時に描画する。"""
-        rows = _apply_context_filter(parsed, _CONTEXT_LINES, self._forced_ctx_indices)
         row_idx = 0
         row_height = self._row_height()
 
@@ -570,7 +711,7 @@ class ContentPanel(Widget):
                 pending_add.append((new_n, text[1:] if text.startswith("+") else text))
             else:
                 _flush()
-                if t == "gap":
+                if t in ("gap", "top_load", "bottom_load"):
                     self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                     left.add_row(
                         Text("···", style=_DIFF_GAP_STYLE),
@@ -639,8 +780,7 @@ class ContentPanel(Widget):
         start, end = self._gap_row_ranges[row_idx]
         for i in range(start, end + 1):
             self._forced_ctx_indices.add(i)
-        self._render_diff(self._current_diff_text, self._current_file_path or "")
-        # フォーカスを維持する
+        self._render_diff()
         if self._diff_mode == DiffViewMode.UNIFIED:
             self.query_one("#diff-table", DataTable).focus()
         else:
@@ -684,7 +824,7 @@ class ContentPanel(Widget):
             return
         self._wrap_lines = not self._wrap_lines
         if self._current_diff_text:
-            self._render_diff(self._current_diff_text, self._current_file_path or "")
+            self._render_diff()
             if self._diff_mode == DiffViewMode.UNIFIED:
                 self.query_one("#diff-table", DataTable).focus()
             else:
@@ -729,6 +869,11 @@ class ContentPanel(Widget):
         self._full_parsed_diff = []
         self._forced_ctx_indices = set()
         self._gap_row_ranges = {}
+        self._file_content = []
+        self._top_extra_count = 0
+        self._bottom_extra_count = 0
+        self._first_diff_new_line = 0
+        self._last_diff_new_line = 0
         log = self.query_one(RichLog)
         log.clear()
         log.display = False

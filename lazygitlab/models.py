@@ -65,6 +65,7 @@ class MergeRequestDetail:
     assignee: str | None = None
     milestone: str | None = None
     pipeline_status: str | None = None
+    source_branch: str = ""
 
 
 @dataclass

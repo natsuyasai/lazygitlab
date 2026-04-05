@@ -225,6 +225,31 @@ class MRService:
 
         raise FileNotFoundInMRError(f"MR !{mr_iid} にファイル '{file_path}' が見つかりません。")
 
+    async def get_file_lines(self, mr_iid: int, file_path: str) -> list[str]:
+        """MR の source_branch でのファイル内容を行リストで返す。
+
+        Raises:
+            FileNotFoundInMRError: ファイルが存在しない場合。
+            GitLabConnectionError: API通信エラー。
+        """
+        detail = await self.get_mr_detail(mr_iid)
+        ref = detail.source_branch or "HEAD"
+        self._logger.debug(
+            "Fetching file content: iid=%s file=%s ref=%s", mr_iid, file_path, ref
+        )
+        try:
+            f = await asyncio.to_thread(self._project.files.get, file_path, ref=ref)
+            content = f.decode().decode("utf-8", errors="replace")
+            return content.splitlines()
+        except gitlab.exceptions.GitlabGetError as exc:
+            if exc.response_code == 404:
+                raise FileNotFoundInMRError(
+                    f"File '{file_path}' not found in MR !{mr_iid}"
+                ) from exc
+            raise GitLabConnectionError("GitLabサーバーとの通信中にエラーが発生しました。") from exc
+        except Exception as exc:
+            raise self._client._wrap_api_error(exc) from exc
+
     def invalidate_cache(self, mr_iid: int | None = None) -> None:
         """キャッシュを無効化する。mr_iid=Noneで全クリア。"""
         if mr_iid is None:
@@ -283,6 +308,7 @@ class MRService:
             web_url=mr.web_url or "",
             created_at=mr.created_at or "",
             updated_at=mr.updated_at or "",
+            source_branch=mr.source_branch or "",
         )
 
     def _convert_to_file_change(self, change: dict[str, Any]) -> FileChange:
