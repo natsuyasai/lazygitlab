@@ -155,6 +155,13 @@ def _apply_context_filter(
     return result
 
 
+def _wrap_text(text: str, width: int) -> str:
+    """テキストを指定幅で折り返す（コード向け文字単位）。"""
+    if len(text) <= width:
+        return text
+    return "\n".join(text[i : i + width] for i in range(0, len(text), width))
+
+
 class ContentPanel(Widget):
     """右ペイン: Overview・差分をレンダリングするウィジェット。"""
 
@@ -184,6 +191,7 @@ class ContentPanel(Widget):
         self._diff_row_lines: list[int | None] = []
         self._comment_lines: set[int] = set()
         self._editor_command: str = "vi"
+        self._wrap_lines: bool = False
 
     def compose(self) -> ComposeResult:
         yield Static("Select an MR from the list.", id="empty-hint")
@@ -310,6 +318,15 @@ class ContentPanel(Widget):
             table.add_column("New", key="new_content")
             self._render_side_by_side_table(table, diff_text)
 
+    def _content_cell(self, text: str, style: str = "") -> Text:
+        """折り返しモードに応じてコンテンツセル用 Text を返す。"""
+        if self._wrap_lines:
+            # パネル幅から行番号列2本(各5文字)+余白を引いた幅
+            wrap_width = max(40, self.size.width - 15)
+            text = _wrap_text(text, wrap_width)
+            return Text(text, style=style)
+        return Text(text, style=style, no_wrap=True)
+
     def _render_unified_table(self, table: DataTable, diff_text: str) -> None:
         """unified diff を DataTable に描画する（±コンテキスト行フィルタ付き）。"""
         parsed = _parse_diff(diff_text)
@@ -321,7 +338,7 @@ class ContentPanel(Widget):
                 table.add_row(
                     Text("···", style=_DIFF_GAP_STYLE),
                     Text("···", style=_DIFF_GAP_STYLE),
-                    Text(text, style=_DIFF_GAP_STYLE),
+                    self._content_cell(text, _DIFF_GAP_STYLE),
                     key=f"gap_{row_idx}",
                 )
                 self._diff_row_lines.append(None)
@@ -329,19 +346,19 @@ class ContentPanel(Widget):
                 table.add_row(
                     Text("", style=_DIFF_HUNK_STYLE),
                     Text("", style=_DIFF_HUNK_STYLE),
-                    Text(text, style=_DIFF_HUNK_STYLE),
+                    self._content_cell(text, _DIFF_HUNK_STYLE),
                     key=f"hunk_{row_idx}",
                 )
                 self._diff_row_lines.append(None)
             elif t == "header":
-                table.add_row("", "", Text(text, style="dim"), key=f"hdr_{row_idx}")
+                table.add_row("", "", self._content_cell(text, "dim"), key=f"hdr_{row_idx}")
                 self._diff_row_lines.append(None)
             elif t == "add":
                 comment = " 💬" if new_n in self._comment_lines else ""
                 table.add_row(
                     Text("", style=_DIFF_ADD_STYLE),
                     Text(str(new_n), style=_DIFF_ADD_STYLE),
-                    Text(text + comment, style=_DIFF_ADD_STYLE),
+                    self._content_cell(text + comment, _DIFF_ADD_STYLE),
                     key=f"add_{row_idx}",
                 )
                 self._diff_row_lines.append(new_n)
@@ -349,7 +366,7 @@ class ContentPanel(Widget):
                 table.add_row(
                     Text(str(old_n), style=_DIFF_REM_STYLE),
                     Text("", style=_DIFF_REM_STYLE),
-                    Text(text, style=_DIFF_REM_STYLE),
+                    self._content_cell(text, _DIFF_REM_STYLE),
                     key=f"rem_{row_idx}",
                 )
                 self._diff_row_lines.append(None)
@@ -358,7 +375,7 @@ class ContentPanel(Widget):
                 table.add_row(
                     str(old_n) if old_n is not None else "",
                     str(new_n) if new_n is not None else "",
-                    text + comment,
+                    self._content_cell(text + comment),
                     key=f"ctx_{row_idx}",
                 )
                 self._diff_row_lines.append(new_n)
@@ -451,6 +468,17 @@ class ContentPanel(Widget):
             if self._diff_mode == DiffViewMode.UNIFIED
             else DiffViewMode.UNIFIED
         )
+        if self._current_mr_iid is not None and self._current_file_path is not None:
+            self.run_worker(
+                self._load_diff(self._current_mr_iid, self._current_file_path),
+                exclusive=True,
+            )
+
+    def action_toggle_wrap(self) -> None:
+        """差分表示の折り返しモードを切り替える。"""
+        if self._view_state != ContentViewState.DIFF:
+            return
+        self._wrap_lines = not self._wrap_lines
         if self._current_mr_iid is not None and self._current_file_path is not None:
             self.run_worker(
                 self._load_diff(self._current_mr_iid, self._current_file_path),

@@ -200,6 +200,14 @@ def test_e_key_binding_has_priority():
     assert bindings["e"].priority is True
 
 
+def test_content_panel_wrap_lines_default():
+    """ContentPanel の _wrap_lines が初期値 False であることを確認する。"""
+    from lazygitlab.tui.widgets.content_panel import ContentPanel
+
+    panel = ContentPanel(MagicMock(), MagicMock())
+    assert panel._wrap_lines is False
+
+
 @pytest.mark.asyncio
 async def test_comment_dialog_has_container():
     """CommentDialog が #dialog-container Vertical ウィジェットを持つことを確認する。"""

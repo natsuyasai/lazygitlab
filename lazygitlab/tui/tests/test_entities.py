@@ -172,3 +172,24 @@ class TestGetCommentLines:
         disc = Discussion(id="ghi", notes=[note])
         result = _get_comment_lines([disc])
         assert result == set()
+
+
+class TestWrapText:
+    def test_short_line_unchanged(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _wrap_text
+        assert _wrap_text("hello", 20) == "hello"
+
+    def test_exact_width_unchanged(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _wrap_text
+        assert _wrap_text("a" * 20, 20) == "a" * 20
+
+    def test_long_line_wraps(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _wrap_text
+        result = _wrap_text("a" * 50, 20)
+        lines = result.split("\n")
+        assert len(lines) == 3
+        assert all(len(line) <= 20 for line in lines)
+
+    def test_empty_string(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _wrap_text
+        assert _wrap_text("", 20) == ""
