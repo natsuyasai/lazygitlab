@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from typing import ClassVar
 
 from rich.markdown import Markdown as RichMarkdown
+from rich.text import Text
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
-from textual.widgets import RichLog, Static
+from textual.widgets import DataTable, RichLog, Static
 
 from lazygitlab.infrastructure.logger import get_logger
 from lazygitlab.models import CommentContext, CommentType, Discussion
@@ -22,14 +24,18 @@ from lazygitlab.tui.screens.error_dialog import ErrorDialog
 
 _logger = get_logger(__name__)
 
-# 差分行の Rich マークアップカラー
+# diff 行スタイル（Rich markup / style 文字列）
 _DIFF_ADD_STYLE = "on #1a3a1a"
-_DIFF_REMOVE_STYLE = "on #3a1a1a"
+_DIFF_REM_STYLE = "on #3a1a1a"
 _DIFF_HUNK_STYLE = "bold #6688cc"
+_DIFF_GAP_STYLE = "dim italic"
+
+# ±コンテキスト行数（デフォルト表示する変更行前後の行数）
+_CONTEXT_LINES = 5
 
 
 def _format_diff_line(line: str) -> str:
-    """差分の1行を Rich マークアップでフォーマットする。"""
+    """差分の1行を Rich マークアップでフォーマットする（テスト用に保持）。"""
     if line.startswith("@@"):
         return f"[{_DIFF_HUNK_STYLE}]{line}[/]"
     if line.startswith("+") and not line.startswith("+++"):
@@ -37,7 +43,7 @@ def _format_diff_line(line: str) -> str:
         return f"[{_DIFF_ADD_STYLE}]{escaped}[/]"
     if line.startswith("-") and not line.startswith("---"):
         escaped = line.replace("[", r"\[")
-        return f"[{_DIFF_REMOVE_STYLE}]{escaped}[/]"
+        return f"[{_DIFF_REM_STYLE}]{escaped}[/]"
     return line.replace("[", r"\[")
 
 
@@ -90,6 +96,65 @@ def _build_overview_text(mr_detail, discussions: list[Discussion]) -> str:
     return "\n".join(lines)
 
 
+def _parse_diff(diff_text: str) -> list[tuple[str, int | None, int | None, str]]:
+    """unified diff を解析してタプルリストを返す。
+
+    Returns:
+        list of (line_type, old_no, new_no, text)
+        line_type: "hunk" | "header" | "add" | "rem" | "ctx"
+    """
+    parsed: list[tuple[str, int | None, int | None, str]] = []
+    old_no = new_no = 0
+    for line in diff_text.splitlines():
+        if line.startswith("@@"):
+            m = re.search(r"-(\d+)(?:,\d+)? \+(\d+)(?:,\d+)?", line)
+            if m:
+                old_no = int(m.group(1)) - 1
+                new_no = int(m.group(2)) - 1
+            parsed.append(("hunk", None, None, line))
+        elif line.startswith("---") or line.startswith("+++"):
+            parsed.append(("header", None, None, line))
+        elif line.startswith("+"):
+            new_no += 1
+            parsed.append(("add", None, new_no, line))
+        elif line.startswith("-"):
+            old_no += 1
+            parsed.append(("rem", old_no, None, line))
+        else:
+            old_no += 1
+            new_no += 1
+            parsed.append(("ctx", old_no, new_no, line))
+    return parsed
+
+
+def _apply_context_filter(
+    parsed: list[tuple[str, int | None, int | None, str]],
+    context: int,
+) -> list[tuple[str, int | None, int | None, str]]:
+    """コンテキスト行を ±context 行に制限し、隠れた行を "gap" エントリに置換する。"""
+    changes = {i for i, (t, *_) in enumerate(parsed) if t in ("add", "rem")}
+
+    def _keep(i: int, t: str) -> bool:
+        if t != "ctx":
+            return True
+        return any(abs(i - c) <= context for c in changes)
+
+    result: list[tuple[str, int | None, int | None, str]] = []
+    i = 0
+    while i < len(parsed):
+        t = parsed[i][0]
+        if not _keep(i, t):
+            gap = 0
+            while i < len(parsed) and not _keep(i, parsed[i][0]):
+                gap += 1
+                i += 1
+            result.append(("gap", None, None, f"··· {gap} lines hidden ···"))
+        else:
+            result.append(parsed[i])
+            i += 1
+    return result
+
+
 class ContentPanel(Widget):
     """右ペイン: Overview・差分をレンダリングするウィジェット。"""
 
@@ -115,17 +180,19 @@ class ContentPanel(Widget):
         self._current_file_path: str | None = None
         self._selected_line: int | None = None
         self._selected_line_type: str = "new"
-        # 差分行リスト（行選択用）
-        self._diff_lines: list[str] = []
+        self._diff_row_lines: list[int | None] = []
         self._comment_lines: set[int] = set()
         self._editor_command: str = "vi"
 
     def compose(self) -> ComposeResult:
         yield Static("Select an MR from the list.", id="empty-hint")
         yield RichLog(id="content-log", highlight=False, markup=True, wrap=False)
+        yield DataTable(id="diff-table", cursor_type="row", show_header=True, zebra_stripes=False)
 
     def on_mount(self) -> None:
         self.query_one(RichLog).display = False
+        table = self.query_one("#diff-table", DataTable)
+        table.display = False
 
     def set_editor_command(self, editor_command: str) -> None:
         self._editor_command = editor_command
@@ -150,6 +217,16 @@ class ContentPanel(Widget):
                 )
             else:
                 self.run_worker(self._load_overview(message.mr_iid), exclusive=True)
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """DataTable のカーソル行変化で選択行を更新する。"""
+        if self._view_state != ContentViewState.DIFF:
+            return
+        row_idx = event.cursor_row
+        if 0 <= row_idx < len(self._diff_row_lines):
+            line_no = self._diff_row_lines[row_idx]
+            if line_no is not None:
+                self._selected_line = line_no
 
     # --- ローダー ---
 
@@ -179,9 +256,11 @@ class ContentPanel(Widget):
     async def _load_diff(self, mr_iid: int, file_path: str) -> None:
         self._view_state = ContentViewState.LOADING
         self.app.sub_title = f"Loading diff for {file_path}..."
-        self._show_log()
-        log = self.query_one(RichLog)
-        log.clear()
+        self._show_diff_table()
+        table = self.query_one("#diff-table", DataTable)
+        table.clear(columns=True)
+        self._diff_row_lines = []
+        self._selected_line = None
         try:
             file_diff, discussions = await _gather_two(
                 self._mr_service.get_mr_diff(mr_iid, file_path),
@@ -190,7 +269,7 @@ class ContentPanel(Widget):
             self._comment_lines = _get_comment_lines(discussions)
             self._render_diff(file_diff.diff, file_path)
             self._view_state = ContentViewState.DIFF
-            self.query_one(RichLog).focus()
+            table.focus()
         except LazyGitLabAPIError as exc:
             _logger.error("Failed to load diff for !%d %s: %s", mr_iid, file_path, exc.message)
             self._view_state = ContentViewState.ERROR
@@ -198,76 +277,162 @@ class ContentPanel(Widget):
         finally:
             self.app.sub_title = ""
 
-    def _render_diff(self, diff_text: str, file_path: str) -> None:
-        """差分テキストをRichLogにレンダリングする。"""
-        log = self.query_one(RichLog)
-        log.clear()
-
-        if self._diff_mode == DiffViewMode.UNIFIED:
-            self._render_unified(log, diff_text, file_path)
-        else:
-            self._render_side_by_side(log, diff_text, file_path)
-
-    def _render_unified(self, log: RichLog, diff_text: str, file_path: str) -> None:
-        """unified差分を表示する。"""
-        lines = diff_text.splitlines()
-        self._diff_lines = lines
-        # 行番号追跡（new行）
-        new_line_no = 0
-        hunk_new_start = 0
-
-        for _i, line in enumerate(lines):
-            # ハンクヘッダーから行番号を解析する
-            if line.startswith("@@"):
-                import re
-
-                m = re.search(r"\+(\d+)", line)
-                if m:
-                    hunk_new_start = int(m.group(1))
-                    new_line_no = hunk_new_start - 1
-                comment_flag = ""
-            elif line.startswith("+") and not line.startswith("+++"):
-                new_line_no += 1
-                comment_flag = " 💬" if new_line_no in self._comment_lines else ""
-            elif line.startswith("-") and not line.startswith("---"):
-                comment_flag = ""
-            else:
-                new_line_no += 1
-                comment_flag = " 💬" if new_line_no in self._comment_lines else ""
-
-            formatted = _format_diff_line(line)
-            if comment_flag:
-                formatted = formatted + f"[yellow]{comment_flag}[/yellow]"
-            log.write(formatted)
-
-    def _render_side_by_side(self, log: RichLog, diff_text: str, file_path: str) -> None:
-        """side-by-side差分を表示する（左: old / 右: new）。"""
-        lines = diff_text.splitlines()
-        self._diff_lines = lines
-        old_lines: list[str] = []
-        new_lines: list[str] = []
-
-        for line in lines:
-            if line.startswith("@@"):
-                # セパレーターとしてハンクヘッダを表示
-                log.write(f"[{_DIFF_HUNK_STYLE}]{line}[/]")
-                # バッファをフラッシュ
-                _flush_side_by_side(log, old_lines, new_lines)
-                old_lines, new_lines = [], []
-            elif line.startswith("-") and not line.startswith("---"):
-                old_lines.append(line[1:])
-            elif line.startswith("+") and not line.startswith("+++"):
-                new_lines.append(line[1:])
-            else:
-                _flush_side_by_side(log, old_lines, new_lines)
-                old_lines, new_lines = [], []
-                log.write(line.replace("[", r"\["))
-
-        _flush_side_by_side(log, old_lines, new_lines)
+    # --- 表示切替ヘルパー ---
 
     def _show_log(self) -> None:
         self.query_one("#empty-hint").display = False
         self.query_one(RichLog).display = True
+        self.query_one("#diff-table", DataTable).display = False
+
+    def _show_diff_table(self) -> None:
+        self.query_one("#empty-hint").display = False
+        self.query_one(RichLog).display = False
+        self.query_one("#diff-table", DataTable).display = True
+
+    # --- 差分レンダラー ---
+
+    def _render_diff(self, diff_text: str, file_path: str) -> None:
+        """差分テキストを DataTable にレンダリングする。"""
+        table = self.query_one("#diff-table", DataTable)
+        table.clear(columns=True)
+        self._diff_row_lines = []
+
+        if self._diff_mode == DiffViewMode.UNIFIED:
+            table.add_column("Old", key="old_no", width=5)
+            table.add_column("New", key="new_no", width=5)
+            table.add_column("Content", key="content")
+            self._render_unified_table(table, diff_text)
+        else:
+            table.add_column("Old#", key="old_no", width=5)
+            table.add_column("Old", key="old_content")
+            table.add_column("New#", key="new_no", width=5)
+            table.add_column("New", key="new_content")
+            self._render_side_by_side_table(table, diff_text)
+
+    def _render_unified_table(self, table: DataTable, diff_text: str) -> None:
+        """unified diff を DataTable に描画する（±コンテキスト行フィルタ付き）。"""
+        parsed = _parse_diff(diff_text)
+        rows = _apply_context_filter(parsed, _CONTEXT_LINES)
+        row_idx = 0
+
+        for t, old_n, new_n, text in rows:
+            if t == "gap":
+                table.add_row(
+                    Text("···", style=_DIFF_GAP_STYLE),
+                    Text("···", style=_DIFF_GAP_STYLE),
+                    Text(text, style=_DIFF_GAP_STYLE),
+                    key=f"gap_{row_idx}",
+                )
+                self._diff_row_lines.append(None)
+            elif t == "hunk":
+                table.add_row(
+                    Text("", style=_DIFF_HUNK_STYLE),
+                    Text("", style=_DIFF_HUNK_STYLE),
+                    Text(text, style=_DIFF_HUNK_STYLE),
+                    key=f"hunk_{row_idx}",
+                )
+                self._diff_row_lines.append(None)
+            elif t == "header":
+                table.add_row("", "", Text(text, style="dim"), key=f"hdr_{row_idx}")
+                self._diff_row_lines.append(None)
+            elif t == "add":
+                comment = " 💬" if new_n in self._comment_lines else ""
+                table.add_row(
+                    Text("", style=_DIFF_ADD_STYLE),
+                    Text(str(new_n), style=_DIFF_ADD_STYLE),
+                    Text(text + comment, style=_DIFF_ADD_STYLE),
+                    key=f"add_{row_idx}",
+                )
+                self._diff_row_lines.append(new_n)
+            elif t == "rem":
+                table.add_row(
+                    Text(str(old_n), style=_DIFF_REM_STYLE),
+                    Text("", style=_DIFF_REM_STYLE),
+                    Text(text, style=_DIFF_REM_STYLE),
+                    key=f"rem_{row_idx}",
+                )
+                self._diff_row_lines.append(None)
+            else:  # ctx
+                comment = " 💬" if new_n in self._comment_lines else ""
+                table.add_row(
+                    str(old_n) if old_n is not None else "",
+                    str(new_n) if new_n is not None else "",
+                    text + comment,
+                    key=f"ctx_{row_idx}",
+                )
+                self._diff_row_lines.append(new_n)
+            row_idx += 1
+
+    def _render_side_by_side_table(self, table: DataTable, diff_text: str) -> None:
+        """side-by-side diff を DataTable に描画する。"""
+        parsed = _parse_diff(diff_text)
+        rows = _apply_context_filter(parsed, _CONTEXT_LINES)
+        row_idx = 0
+
+        pending_rem: list[tuple[int, str]] = []
+        pending_add: list[tuple[int, str]] = []
+
+        def _flush() -> None:
+            nonlocal row_idx
+            max_len = max(len(pending_rem), len(pending_add))
+            for k in range(max_len):
+                old_n2, old_t = pending_rem[k] if k < len(pending_rem) else (None, "")
+                new_n2, new_t = pending_add[k] if k < len(pending_add) else (None, "")
+                table.add_row(
+                    Text(str(old_n2) if old_n2 else "", style=_DIFF_REM_STYLE if old_t else ""),
+                    Text(old_t, style=_DIFF_REM_STYLE if old_t else ""),
+                    Text(str(new_n2) if new_n2 else "", style=_DIFF_ADD_STYLE if new_t else ""),
+                    Text(new_t, style=_DIFF_ADD_STYLE if new_t else ""),
+                    key=f"sbs_{row_idx}",
+                )
+                self._diff_row_lines.append(new_n2)
+                row_idx += 1
+            pending_rem.clear()
+            pending_add.clear()
+
+        for t, old_n, new_n, text in rows:
+            if t == "rem":
+                pending_rem.append((old_n, text[1:] if text.startswith("-") else text))
+            elif t == "add":
+                pending_add.append((new_n, text[1:] if text.startswith("+") else text))
+            else:
+                _flush()
+                if t == "gap":
+                    table.add_row(
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        Text(text, style=_DIFF_GAP_STYLE),
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        Text("", style=_DIFF_GAP_STYLE),
+                        key=f"gap_{row_idx}",
+                    )
+                    self._diff_row_lines.append(None)
+                elif t == "hunk":
+                    table.add_row(
+                        Text("", style=_DIFF_HUNK_STYLE),
+                        Text(text, style=_DIFF_HUNK_STYLE),
+                        Text("", style=_DIFF_HUNK_STYLE),
+                        Text("", style=_DIFF_HUNK_STYLE),
+                        key=f"hunk_{row_idx}",
+                    )
+                    self._diff_row_lines.append(None)
+                elif t == "header":
+                    table.add_row("", Text(text, style="dim"), "", "", key=f"hdr_{row_idx}")
+                    self._diff_row_lines.append(None)
+                else:  # ctx
+                    ctx_text = text[1:] if text.startswith(" ") else text
+                    table.add_row(
+                        str(old_n) if old_n is not None else "",
+                        Text(ctx_text),
+                        str(new_n) if new_n is not None else "",
+                        Text(ctx_text),
+                        key=f"ctx_{row_idx}",
+                    )
+                    self._diff_row_lines.append(new_n)
+                row_idx += 1
+
+        _flush()
+
+    # --- クエリ ---
 
     def get_selected_line(self) -> tuple[str, int] | None:
         """現在選択中の (file_path, line_number) を返す。行未選択時は行1を使用。"""
@@ -323,22 +488,14 @@ class ContentPanel(Widget):
         self._current_mr_iid = None
         self._current_file_path = None
         self._selected_line = None
-        self._diff_lines = []
+        self._diff_row_lines = []
         log = self.query_one(RichLog)
         log.clear()
         log.display = False
+        table = self.query_one("#diff-table", DataTable)
+        table.clear(columns=True)
+        table.display = False
         self.query_one("#empty-hint").display = True
-
-
-def _flush_side_by_side(log: RichLog, old_lines: list[str], new_lines: list[str]) -> None:
-    """side-by-side バッファをフラッシュして表示する。"""
-    max_len = max(len(old_lines), len(new_lines))
-    for i in range(max_len):
-        left = old_lines[i] if i < len(old_lines) else ""
-        right = new_lines[i] if i < len(new_lines) else ""
-        left_fmt = left.replace("[", r"\[")
-        right_fmt = right.replace("[", r"\[")
-        log.write(f"[{_DIFF_REMOVE_STYLE}]{left_fmt:<50}[/] │ [{_DIFF_ADD_STYLE}]{right_fmt}[/]")
 
 
 async def _gather_two(coro1, coro2):

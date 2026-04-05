@@ -145,7 +145,7 @@ class LazyGitLabApp(App):
         editor = self._config.editor or "vi"
         _logger.info("Opening editor: %s +%d %s", editor, line_no, file_path)
         try:
-            async with self.suspend():
+            with self.suspend():
                 subprocess.run([editor, f"+{line_no}", file_path], check=False)  # noqa: S603
         except FileNotFoundError:
             await self.push_screen(ErrorDialog(f"Editor not found: {editor}"))

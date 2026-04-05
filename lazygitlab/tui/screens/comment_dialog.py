@@ -128,7 +128,7 @@ class CommentDialog(ModalScreen[None]):
             editor_cmd = self._editor_command or "vi"
             _logger.info("Opening external editor: %s %s", editor_cmd, tmp_path)
 
-            async with self.app.suspend():
+            with self.app.suspend():
                 result = subprocess.run(  # noqa: S603
                     [editor_cmd, str(tmp_path)],
                     check=False,
