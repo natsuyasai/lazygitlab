@@ -95,6 +95,29 @@ ErrorDialog {
     color: $text-muted;
 }
 
+/* CommentViewDialog */
+CommentViewDialog {
+    align: center middle;
+}
+
+#comment-view-container {
+    width: 80%;
+    height: 70%;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+#comment-view-subtitle {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#comment-view-log {
+    height: 1fr;
+    border: solid $primary-darken-2;
+}
+
 /* Side-by-side diff コンテナ */
 #sbs-container {
     height: 100%;
