@@ -45,22 +45,24 @@ class CommentDialog(ModalScreen[None]):
         self._submitting = False
 
     def compose(self) -> ComposeResult:
+        title, subtitle = self._build_header()
         with Vertical(id="dialog-container"):
-            yield Label(self._build_header(), id="comment-header")
+            yield Label(title, id="comment-title")
+            if subtitle:
+                yield Label(subtitle, id="comment-subtitle")
             yield TextArea(id="comment-input")
             yield Label("", id="comment-error")
             with Horizontal(id="comment-buttons"):
                 yield Button("Submit (Ctrl+S)", variant="primary", id="submit-button")
                 yield Button("Cancel (Esc)", variant="default", id="cancel-button")
 
-
-    def _build_header(self) -> str:
+    def _build_header(self) -> tuple[str, str]:
         ctx = self._context
         if ctx.comment_type == CommentType.INLINE:
-            return f"[bold]Add Inline Comment[/bold]\n{ctx.file_path} (line {ctx.line})"
+            return "[bold]Add Inline Comment[/bold]", f"{ctx.file_path} (line {ctx.line})"
         if ctx.comment_type == CommentType.NOTE:
-            return "[bold]Add Note[/bold]\nMR-level comment"
-        return "[bold]Reply to Discussion[/bold]"
+            return "[bold]Add Note[/bold]", "MR-level comment"
+        return "[bold]Reply to Discussion[/bold]", ""
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "submit-button":
