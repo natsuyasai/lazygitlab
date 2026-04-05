@@ -39,10 +39,13 @@ class CommentDialog(ModalScreen[None]):
         editor_command: str,
     ) -> None:
         super().__init__()
-        self._context = comment_context
+        self._comment_context = comment_context
         self._comment_service = comment_service
         self._editor_command = editor_command
         self._submitting = False
+
+    def on_mount(self) -> None:
+        self.query_one(TextArea).focus()
 
     def compose(self) -> ComposeResult:
         title, subtitle = self._build_header()
@@ -57,7 +60,7 @@ class CommentDialog(ModalScreen[None]):
                 yield Button("Cancel (Esc)", variant="default", id="cancel-button")
 
     def _build_header(self) -> tuple[str, str]:
-        ctx = self._context
+        ctx = self._comment_context
         if ctx.comment_type == CommentType.INLINE:
             return "[bold]Add Inline Comment[/bold]", f"{ctx.file_path} (line {ctx.line})"
         if ctx.comment_type == CommentType.NOTE:
@@ -83,7 +86,7 @@ class CommentDialog(ModalScreen[None]):
         error_label.update("")
 
         try:
-            ctx = self._context
+            ctx = self._comment_context
             if ctx.comment_type == CommentType.INLINE:
                 await self._comment_service.add_inline_comment(
                     mr_iid=ctx.mr_iid,
