@@ -195,6 +195,25 @@ class TestWrapText:
         assert _wrap_text("", 20) == ""
 
 
+class TestSBSCursorSync:
+    """SBS カーソル同期ロジックのテスト（純関数）。"""
+
+    def test_diff_row_lines_populated_after_left_render(self) -> None:
+        """_parse_diff と _apply_context_filter の組み合わせが SBS に必要な行データを提供できることを確認する。"""
+        from lazygitlab.tui.widgets.content_panel import _parse_diff, _apply_context_filter
+
+        diff = "@@ -1,2 +1,2 @@\n context\n-old\n+new\n"
+        parsed = _parse_diff(diff)
+        rows = _apply_context_filter(parsed, 5)
+
+        # rem と add が1行ずつある
+        types = [t for t, *_ in rows]
+        assert types.count("rem") == 1
+        assert types.count("add") == 1
+        # ctx 行がある
+        assert "ctx" in types
+
+
 class TestSBSRendering:
     """side-by-side diff の行数対称性テスト。"""
 

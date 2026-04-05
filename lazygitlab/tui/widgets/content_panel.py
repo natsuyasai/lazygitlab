@@ -236,8 +236,10 @@ class ContentPanel(Widget):
             else:
                 self.run_worker(self._load_overview(message.mr_iid), exclusive=True)
 
-    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        """DataTable のカーソル行変化で選択行を更新する。"""
+    def on_data_table_row_highlighted(
+        self, event: DataTable.RowHighlighted
+    ) -> None:
+        """選択行を更新し、SBS モードでは対向テーブルのカーソルを同期する。"""
         if self._view_state != ContentViewState.DIFF:
             return
         row_idx = event.cursor_row
@@ -245,6 +247,16 @@ class ContentPanel(Widget):
             line_no = self._diff_row_lines[row_idx]
             if line_no is not None:
                 self._selected_line = line_no
+
+        if self._diff_mode == DiffViewMode.SIDE_BY_SIDE:
+            source = event.data_table
+            try:
+                left = self.query_one("#diff-table-left", DataTable)
+                right = self.query_one("#diff-table-right", DataTable)
+                other = right if source is left else left
+                other.move_cursor(row=row_idx, animate=False)
+            except Exception as e:
+                _logger.debug(f"Failed to sync cursor in SBS mode: {e}")
 
     # --- ローダー ---
 
