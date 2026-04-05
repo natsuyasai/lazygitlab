@@ -16,6 +16,7 @@ from lazygitlab.infrastructure.logger import get_logger
 from lazygitlab.models import AppConfig
 from lazygitlab.services import CommentService, GitLabClient, MRService
 from lazygitlab.services.exceptions import LazyGitLabAPIError
+from lazygitlab.tui.messages import CommentPosted, ShowDiff, ShowOverview
 from lazygitlab.tui.screens.error_dialog import ErrorDialog
 from lazygitlab.tui.screens.help_screen import HelpScreen
 from lazygitlab.tui.widgets.content_panel import ContentPanel
@@ -160,6 +161,35 @@ class LazyGitLabApp(App):
                 mr_panel.remove_class("-hidden")
             else:
                 mr_panel.add_class("-hidden")
+        except Exception:  # noqa: S110
+            pass
+
+    # --- メッセージハンドラ（兄弟ウィジェット間のルーティング） ---
+
+    def on_show_overview(self, message: ShowOverview) -> None:
+        """MRListPanel から上がってきた ShowOverview を ContentPanel に転送する。"""
+        message.stop()
+        try:
+            content_panel = self.query_one(ContentPanel)
+            content_panel.on_show_overview(message)
+        except Exception:  # noqa: S110
+            pass
+
+    def on_show_diff(self, message: ShowDiff) -> None:
+        """MRListPanel から上がってきた ShowDiff を ContentPanel に転送する。"""
+        message.stop()
+        try:
+            content_panel = self.query_one(ContentPanel)
+            content_panel.on_show_diff(message)
+        except Exception:  # noqa: S110
+            pass
+
+    def on_comment_posted(self, message: CommentPosted) -> None:
+        """CommentDialog から上がってきた CommentPosted を ContentPanel に転送する。"""
+        message.stop()
+        try:
+            content_panel = self.query_one(ContentPanel)
+            content_panel.on_comment_posted(message)
         except Exception:  # noqa: S110
             pass
 
