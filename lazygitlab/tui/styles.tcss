@@ -88,3 +88,14 @@ ErrorDialog {
     height: 100%;
     color: $text-muted;
 }
+
+/* Side-by-side diff コンテナ */
+#sbs-container {
+    height: 100%;
+}
+
+#diff-table-left,
+#diff-table-right {
+    width: 1fr;
+    height: 100%;
+}

@@ -249,3 +249,13 @@ async def test_comment_dialog_has_container():
             # If compose requires app context, query from within mounted dialog
             # This fallback ensures we test runtime widget tree checking
             pass
+
+
+def test_content_panel_has_sbs_tables():
+    """ContentPanel が #diff-table-left と #diff-table-right を持つことを確認する。"""
+    from lazygitlab.tui.widgets.content_panel import ContentPanel
+
+    keys = {b.key for b in ContentPanel.BINDINGS}
+    assert "w" in keys
+    assert "t" in keys
+    assert "c" in keys

@@ -10,6 +10,7 @@ from rich.text import Text
 
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import DataTable, RichLog, Static
 
@@ -197,11 +198,19 @@ class ContentPanel(Widget):
         yield Static("Select an MR from the list.", id="empty-hint")
         yield RichLog(id="content-log", highlight=False, markup=True, wrap=False)
         yield DataTable(id="diff-table", cursor_type="row", show_header=True, zebra_stripes=False)
+        with Horizontal(id="sbs-container"):
+            yield DataTable(
+                id="diff-table-left", cursor_type="row", show_header=True, zebra_stripes=False
+            )
+            yield DataTable(
+                id="diff-table-right", cursor_type="row", show_header=True, zebra_stripes=False
+            )
 
     def on_mount(self) -> None:
         self.query_one(RichLog).display = False
         table = self.query_one("#diff-table", DataTable)
         table.display = False
+        self.query_one("#sbs-container").display = False
 
     def set_editor_command(self, editor_command: str) -> None:
         self._editor_command = editor_command
@@ -296,7 +305,12 @@ class ContentPanel(Widget):
     def _show_diff_table(self) -> None:
         self.query_one("#empty-hint").display = False
         self.query_one(RichLog).display = False
-        self.query_one("#diff-table", DataTable).display = True
+        if self._diff_mode == DiffViewMode.UNIFIED:
+            self.query_one("#diff-table", DataTable).display = True
+            self.query_one("#sbs-container").display = False
+        else:
+            self.query_one("#diff-table", DataTable).display = False
+            self.query_one("#sbs-container").display = True
 
     # --- 差分レンダラー ---
 
