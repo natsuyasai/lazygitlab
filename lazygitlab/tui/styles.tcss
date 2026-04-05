@@ -50,9 +50,12 @@ ContentPanel {
 
 /* CommentDialog */
 CommentDialog {
+    align: center middle;
+}
+
+#dialog-container {
     width: 80%;
     height: 60%;
-    align: center middle;
     background: $surface;
     border: thick $primary;
     padding: 1 2;

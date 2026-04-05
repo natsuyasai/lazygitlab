@@ -9,7 +9,7 @@ from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, TextArea
 
@@ -45,12 +45,13 @@ class CommentDialog(ModalScreen[None]):
         self._submitting = False
 
     def compose(self) -> ComposeResult:
-        yield Label(self._build_header(), id="comment-header")
-        yield TextArea(id="comment-input")
-        yield Label("", id="comment-error")
-        with Horizontal(id="comment-buttons"):
-            yield Button("Submit (Ctrl+S)", variant="primary", id="submit-button")
-            yield Button("Cancel (Esc)", variant="default", id="cancel-button")
+        with Vertical(id="dialog-container"):
+            yield Label(self._build_header(), id="comment-header")
+            yield TextArea(id="comment-input")
+            yield Label("", id="comment-error")
+            with Horizontal(id="comment-buttons"):
+                yield Button("Submit (Ctrl+S)", variant="primary", id="submit-button")
+                yield Button("Cancel (Esc)", variant="default", id="cancel-button")
 
     def on_mount(self) -> None:
         self.query_one(TextArea).focus()

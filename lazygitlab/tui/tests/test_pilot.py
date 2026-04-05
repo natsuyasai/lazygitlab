@@ -198,3 +198,26 @@ def test_e_key_binding_has_priority():
     bindings = {b.key: b for b in LazyGitLabApp.BINDINGS}
     assert "e" in bindings
     assert bindings["e"].priority is True
+
+
+def test_comment_dialog_has_dialog_container_id():
+    """CommentDialog が compose() で #dialog-container Vertical コンテナを返すことを確認する。"""
+    from lazygitlab.models import CommentContext, CommentType
+    from lazygitlab.tui.screens.comment_dialog import CommentDialog
+    from textual.containers import Vertical
+
+    context = CommentContext(mr_iid=1, comment_type=CommentType.NOTE)
+    dialog = CommentDialog(context, MagicMock(), "vi")
+
+    # Check that the dialog is a ModalScreen
+    from textual.screen import ModalScreen
+    assert isinstance(dialog, ModalScreen)
+
+    # Verify that when compose is called in a proper app context,
+    # the structure has a Vertical container with id="dialog-container"
+    # We do this by checking the source code rather than trying to execute compose()
+    # which requires an active app
+    import inspect
+    source = inspect.getsource(dialog.compose)
+    assert 'Vertical(id="dialog-container")' in source
+    assert 'with Vertical' in source
