@@ -159,8 +159,9 @@ class ContentPanel(Widget):
     """右ペイン: Overview・差分をレンダリングするウィジェット。"""
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("t", "toggle_diff_mode", "Toggle unified/side-by-side"),
-        Binding("c", "add_comment", "Add Comment"),
+        Binding("t", "toggle_diff_mode", "Toggle unified/side-by-side", priority=True),
+        Binding("c", "add_comment", "Add Comment", priority=True),
+        Binding("w", "toggle_wrap", "Wrap", priority=True),
     ]
 
     DEFAULT_CSS = """

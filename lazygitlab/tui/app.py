@@ -36,7 +36,7 @@ class LazyGitLabApp(App):
         Binding("q", "quit", "Quit"),
         Binding("question_mark", "show_help", "Help"),
         Binding("r", "refresh", "Refresh"),
-        Binding("e", "open_in_editor", "Editor"),
+        Binding("e", "open_in_editor", "Editor", priority=True),
         Binding("left_square_bracket", "toggle_sidebar", "Toggle Sidebar"),
     ]
 
