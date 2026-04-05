@@ -329,6 +329,7 @@ class ContentPanel(Widget):
 
     def _render_diff(self, diff_text: str, file_path: str) -> None:
         """差分テキストを DataTable にレンダリングする。"""
+        self._diff_row_lines = []
         table = self.query_one("#diff-table", DataTable)
         table.clear(columns=True)
 

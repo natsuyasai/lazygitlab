@@ -209,22 +209,18 @@ def test_content_panel_wrap_lines_default():
 
 
 def test_comment_dialog_has_container():
-    """CommentDialog が #dialog-container Vertical ウィジェットを持つことを確認する。"""
+    """CommentDialog の compose が #dialog-container Vertical を含むことを確認する。"""
     import inspect
+
     from lazygitlab.models import CommentContext, CommentType
     from lazygitlab.tui.screens.comment_dialog import CommentDialog
 
     context = CommentContext(mr_iid=1, comment_type=CommentType.NOTE)
     dialog = CommentDialog(context, MagicMock(), "vi")
 
-    # Verify the compose method exists and can be called
-    assert hasattr(dialog, 'compose')
-    assert callable(dialog.compose)
-
-    # Verify the source code contains the expected dialog-container ID
     source = inspect.getsource(dialog.compose)
-    assert 'dialog-container' in source
-    assert 'Vertical' in source
+    assert "dialog-container" in source
+    assert "Vertical" in source
 
 
 @pytest.mark.asyncio
