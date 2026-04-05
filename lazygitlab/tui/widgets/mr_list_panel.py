@@ -47,8 +47,10 @@ class MRListPanel(Widget):
         self._mr_service = mr_service
         self._category_pages: dict[MRCategory, int] = dict.fromkeys(MRCategory, 1)
         self._selected_mr_iid: int | None = None
-        self._expanded_mrs: set[int] = set()
-        self._loading_mrs: set[int] = set()
+        # mr_iid ではなくノードオブジェクト自体で追跡する
+        # （同一 MR が複数カテゴリに存在する場合に独立して展開できるようにするため）
+        self._expanded_nodes: set[TreeNode] = set()
+        self._loading_nodes: set[TreeNode] = set()
         # カテゴリノードへの参照を保持
         self._category_nodes: dict[MRCategory, TreeNode[TreeNodeData]] = {}
 
@@ -133,14 +135,14 @@ class MRListPanel(Widget):
             changes = await self._mr_service.get_mr_changes(mr_iid)
         except LazyGitLabAPIError as exc:
             _logger.error("Failed to load MR changes for !%d: %s", mr_iid, exc.message)
-            self._loading_mrs.discard(mr_iid)
+            self._loading_nodes.discard(node)
             await self.app.push_screen(ErrorDialog(exc.message))
             return
         finally:
             self.app.sub_title = ""
 
-        self._expanded_mrs.add(mr_iid)
-        self._loading_mrs.discard(mr_iid)
+        self._expanded_nodes.add(node)
+        self._loading_nodes.discard(node)
 
         # Overview ノード
         node.add_leaf(
@@ -227,13 +229,14 @@ class MRListPanel(Widget):
             mr_iid = data.mr_iid
             if mr_iid is None:
                 return
-            if mr_iid in self._expanded_mrs:
-                # 既に展開済み: Tree ウィジェットが自動的に toggle するため何もしない
+            if node in self._expanded_nodes:
+                # 既に展開済み: toggle で開閉する
+                node.toggle()
                 return
-            if mr_iid in self._loading_mrs:
+            if node in self._loading_nodes:
                 # 読み込み中: 二重展開を防ぐ
                 return
-            self._loading_mrs.add(mr_iid)
+            self._loading_nodes.add(node)
             self.run_worker(self._expand_mr(node, mr_iid), exclusive=False)
             return
 
@@ -261,7 +264,7 @@ class MRListPanel(Widget):
         tree = self.query_one(Tree)
         tree.root.remove_children()
         self._category_nodes.clear()
-        self._expanded_mrs.clear()
-        self._loading_mrs.clear()
+        self._expanded_nodes.clear()
+        self._loading_nodes.clear()
         self._category_pages = dict.fromkeys(MRCategory, 1)
         await self._load_all_categories()

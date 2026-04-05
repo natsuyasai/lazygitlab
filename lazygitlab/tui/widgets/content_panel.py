@@ -168,6 +168,7 @@ class ContentPanel(Widget):
             log.clear()
             log.write(RichMarkdown(text))
             self._view_state = ContentViewState.OVERVIEW
+            log.focus()
         except LazyGitLabAPIError as exc:
             _logger.error("Failed to load overview for !%d: %s", mr_iid, exc.message)
             self._view_state = ContentViewState.ERROR
@@ -189,6 +190,7 @@ class ContentPanel(Widget):
             self._comment_lines = _get_comment_lines(discussions)
             self._render_diff(file_diff.diff, file_path)
             self._view_state = ContentViewState.DIFF
+            self.query_one(RichLog).focus()
         except LazyGitLabAPIError as exc:
             _logger.error("Failed to load diff for !%d %s: %s", mr_iid, file_path, exc.message)
             self._view_state = ContentViewState.ERROR
@@ -268,13 +270,9 @@ class ContentPanel(Widget):
         self.query_one(RichLog).display = True
 
     def get_selected_line(self) -> tuple[str, int] | None:
-        """現在選択中の (file_path, line_number) を返す。選択なしはNone。"""
-        if (
-            self._view_state == ContentViewState.DIFF
-            and self._current_file_path is not None
-            and self._selected_line is not None
-        ):
-            return (self._current_file_path, self._selected_line)
+        """現在選択中の (file_path, line_number) を返す。行未選択時は行1を使用。"""
+        if self._view_state == ContentViewState.DIFF and self._current_file_path is not None:
+            return (self._current_file_path, self._selected_line or 1)
         return None
 
     # --- アクション ---
@@ -340,7 +338,7 @@ def _flush_side_by_side(log: RichLog, old_lines: list[str], new_lines: list[str]
         right = new_lines[i] if i < len(new_lines) else ""
         left_fmt = left.replace("[", r"\[")
         right_fmt = right.replace("[", r"\[")
-        log.write(f"[{_DIFF_REMOVE_STYLE}]{left_fmt:<50}[/]  [{_DIFF_ADD_STYLE}]{right_fmt}[/]")
+        log.write(f"[{_DIFF_REMOVE_STYLE}]{left_fmt:<50}[/] │ [{_DIFF_ADD_STYLE}]{right_fmt}[/]")
 
 
 async def _gather_two(coro1, coro2):
