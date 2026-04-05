@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from typing import ClassVar
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.widget import Widget
 from textual.widgets import Tree
 from textual.widgets._tree import TreeNode
@@ -28,6 +30,11 @@ _logger = get_logger(__name__)
 class MRListPanel(Widget):
     """左ペイン: MRをカテゴリ別ツリーで表示するウィジェット。"""
 
+    BINDINGS: ClassVar[list[Binding]] = [
+        Binding("j", "cursor_down", "Down", show=False),
+        Binding("k", "cursor_up", "Up", show=False),
+    ]
+
     DEFAULT_CSS = """
     MRListPanel {
         width: 30%;
@@ -41,6 +48,7 @@ class MRListPanel(Widget):
         self._category_pages: dict[MRCategory, int] = dict.fromkeys(MRCategory, 1)
         self._selected_mr_iid: int | None = None
         self._expanded_mrs: set[int] = set()
+        self._loading_mrs: set[int] = set()
         # カテゴリノードへの参照を保持
         self._category_nodes: dict[MRCategory, TreeNode[TreeNodeData]] = {}
 
@@ -125,12 +133,14 @@ class MRListPanel(Widget):
             changes = await self._mr_service.get_mr_changes(mr_iid)
         except LazyGitLabAPIError as exc:
             _logger.error("Failed to load MR changes for !%d: %s", mr_iid, exc.message)
+            self._loading_mrs.discard(mr_iid)
             await self.app.push_screen(ErrorDialog(exc.message))
             return
         finally:
             self.app.sub_title = ""
 
         self._expanded_mrs.add(mr_iid)
+        self._loading_mrs.discard(mr_iid)
 
         # Overview ノード
         node.add_leaf(
@@ -218,9 +228,13 @@ class MRListPanel(Widget):
             if mr_iid is None:
                 return
             if mr_iid in self._expanded_mrs:
-                node.toggle()
-            else:
-                self.run_worker(self._expand_mr(node, mr_iid), exclusive=False)
+                # 既に展開済み: Tree ウィジェットが自動的に toggle するため何もしない
+                return
+            if mr_iid in self._loading_mrs:
+                # 読み込み中: 二重展開を防ぐ
+                return
+            self._loading_mrs.add(mr_iid)
+            self.run_worker(self._expand_mr(node, mr_iid), exclusive=False)
             return
 
         if data.node_type == TreeNodeType.OVERVIEW:
@@ -236,11 +250,18 @@ class MRListPanel(Widget):
         if data.node_type == TreeNodeType.LOAD_MORE:
             self.run_worker(self._load_more(node), exclusive=False)
 
+    def action_cursor_down(self) -> None:
+        self.query_one(Tree).action_cursor_down()
+
+    def action_cursor_up(self) -> None:
+        self.query_one(Tree).action_cursor_up()
+
     async def refresh_list(self) -> None:
         """MR一覧を再取得する（リフレッシュ時）。"""
         tree = self.query_one(Tree)
         tree.root.remove_children()
         self._category_nodes.clear()
         self._expanded_mrs.clear()
+        self._loading_mrs.clear()
         self._category_pages = dict.fromkeys(MRCategory, 1)
         await self._load_all_categories()

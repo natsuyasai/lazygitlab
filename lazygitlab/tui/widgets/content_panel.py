@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from rich.markdown import Markdown as RichMarkdown
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
@@ -164,8 +166,7 @@ class ContentPanel(Widget):
             )
             text = _build_overview_text(mr_detail, discussions)
             log.clear()
-            for line in text.splitlines():
-                log.write(line)
+            log.write(RichMarkdown(text))
             self._view_state = ContentViewState.OVERVIEW
         except LazyGitLabAPIError as exc:
             _logger.error("Failed to load overview for !%d: %s", mr_iid, exc.message)
