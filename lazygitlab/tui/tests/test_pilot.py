@@ -251,8 +251,8 @@ async def test_comment_dialog_has_container():
             pass
 
 
-def test_content_panel_has_sbs_tables():
-    """ContentPanel が #diff-table-left と #diff-table-right を持つことを確認する。"""
+def test_content_panel_has_required_bindings():
+    """ContentPanel が t/w/c バインディングを持つことを確認する。"""
     from lazygitlab.tui.widgets.content_panel import ContentPanel
 
     keys = {b.key for b in ContentPanel.BINDINGS}

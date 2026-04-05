@@ -301,6 +301,7 @@ class ContentPanel(Widget):
         self.query_one("#empty-hint").display = False
         self.query_one(RichLog).display = True
         self.query_one("#diff-table", DataTable).display = False
+        self.query_one("#sbs-container").display = False
 
     def _show_diff_table(self) -> None:
         self.query_one("#empty-hint").display = False
@@ -538,6 +539,9 @@ class ContentPanel(Widget):
         table = self.query_one("#diff-table", DataTable)
         table.clear(columns=True)
         table.display = False
+        self.query_one("#diff-table-left", DataTable).clear(columns=True)
+        self.query_one("#diff-table-right", DataTable).clear(columns=True)
+        self.query_one("#sbs-container").display = False
         self.query_one("#empty-hint").display = True
 
 
