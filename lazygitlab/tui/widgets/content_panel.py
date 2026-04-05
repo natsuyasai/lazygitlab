@@ -7,7 +7,6 @@ from typing import ClassVar
 
 from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
-
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
@@ -236,9 +235,7 @@ class ContentPanel(Widget):
             else:
                 self.run_worker(self._load_overview(message.mr_iid), exclusive=True)
 
-    def on_data_table_row_highlighted(
-        self, event: DataTable.RowHighlighted
-    ) -> None:
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """選択行を更新し、SBS モードでは対向テーブルのカーソルを同期する。"""
         if self._view_state != ContentViewState.DIFF:
             return
@@ -414,9 +411,7 @@ class ContentPanel(Widget):
                 self._diff_row_lines.append(new_n)
             row_idx += 1
 
-    def _render_sbs_tables(
-        self, left: DataTable, right: DataTable, diff_text: str
-    ) -> None:
+    def _render_sbs_tables(self, left: DataTable, right: DataTable, diff_text: str) -> None:
         """side-by-side の左右テーブルを同時に描画する。
         diff_text を1回だけ解析し、左右に同数の行を追加することで
         カーソル同期が正しく機能することを保証する。

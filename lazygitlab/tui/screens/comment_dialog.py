@@ -55,8 +55,9 @@ class CommentDialog(ModalScreen[None]):
 
     def on_mount(self) -> None:
         import sys
+
         # Skip focus in test environments to avoid hangs
-        if 'pytest' not in sys.modules:
+        if "pytest" not in sys.modules:
             self.query_one(TextArea).focus()
 
     def _build_header(self) -> str:
