@@ -17,6 +17,7 @@ _TOKEN_PLACEHOLDERS = {"your-token-here", "xxx", "xxxx", "placeholder", "changem
 _DEFAULT_CONFIG_TEMPLATE = """\
 [gitlab]
 url = "{gitlab_url}"
+ssl_verify = true
 
 [auth]
 token = "{token}"
@@ -29,6 +30,7 @@ level = "INFO"
 
 [appearance]
 theme = "dark"
+pygments_style = ""
 
 [git]
 remote_name = ""
@@ -152,6 +154,8 @@ class ConfigManager:
             log_level=logging_section.get("level", "INFO").upper(),
             theme=appearance_section.get("theme", "dark"),
             remote_name=git_section.get("remote_name", ""),
+            ssl_verify=gitlab_section.get("ssl_verify", True),
+            pygments_style=appearance_section.get("pygments_style", ""),
         )
 
         errors = self.validate(config)
@@ -168,6 +172,59 @@ class ConfigManager:
             )
 
         return config
+
+    def save_setting(self, section: str, key: str, value: str) -> None:
+        """設定ファイルの指定セクション・キーの値を更新して保存する。
+
+        該当のキーが存在しない場合はセクション末尾に追加する。
+        """
+        if not self._config_path.exists():
+            return
+
+        text = self._config_path.read_text(encoding="utf-8")
+        lines = text.splitlines(keepends=True)
+
+        # value を TOML 値として文字列化する（bool/str 対応）
+        if isinstance(value, bool):
+            toml_value = "true" if value else "false"
+        else:
+            toml_value = f'"{value}"'
+
+        import re
+
+        # セクション内でキーを探して置換する
+        in_section = False
+        key_pattern = re.compile(rf"^\s*{re.escape(key)}\s*=")
+        section_pattern = re.compile(rf"^\s*\[{re.escape(section)}\]")
+        next_section_pattern = re.compile(r"^\s*\[")
+
+        new_lines: list[str] = []
+        key_written = False
+        section_end_idx: int | None = None
+
+        for i, line in enumerate(lines):
+            if section_pattern.match(line):
+                in_section = True
+                new_lines.append(line)
+                continue
+            if in_section:
+                if next_section_pattern.match(line) and not section_pattern.match(line):
+                    # セクションが終わった — キーがまだ書かれていなければここに挿入
+                    if not key_written:
+                        new_lines.append(f'{key} = {toml_value}\n')
+                        key_written = True
+                    in_section = False
+                elif key_pattern.match(line):
+                    new_lines.append(f'{key} = {toml_value}\n')
+                    key_written = True
+                    continue
+            new_lines.append(line)
+
+        # セクションが最後まで続いていてキーが未書き込みの場合は末尾に追加
+        if not key_written:
+            new_lines.append(f'{key} = {toml_value}\n')
+
+        self._write_config("".join(new_lines))
 
     @staticmethod
     def _read_toml(path: Path) -> dict[str, Any]:

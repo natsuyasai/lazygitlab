@@ -33,6 +33,8 @@ class MRListPanel(Widget):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
+        Binding("h", "scroll_left", "Left", show=False),
+        Binding("l", "scroll_right", "Right", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -277,6 +279,12 @@ class MRListPanel(Widget):
 
     def action_cursor_up(self) -> None:
         self.query_one(Tree).action_cursor_up()
+
+    def action_scroll_left(self) -> None:
+        self.query_one(Tree).scroll_left(animate=False)
+
+    def action_scroll_right(self) -> None:
+        self.query_one(Tree).scroll_right(animate=False)
 
     async def refresh_list(self) -> None:
         """MR一覧を再取得する（リフレッシュ時）。"""

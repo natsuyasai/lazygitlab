@@ -43,6 +43,7 @@ class GitLabClient:
             url=config.gitlab_url,
             private_token=config.token,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
+            ssl_verify=config.ssl_verify,
         )
         self._current_user: CurrentUser | None = None
 

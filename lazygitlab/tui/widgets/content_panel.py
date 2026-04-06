@@ -26,6 +26,10 @@ from lazygitlab.tui.messages import CommentPosted, ShowDiff, ShowOverview
 from lazygitlab.tui.screens.comment_dialog import CommentDialog
 from lazygitlab.tui.screens.comment_view_dialog import CommentViewDialog
 from lazygitlab.tui.screens.error_dialog import ErrorDialog
+from lazygitlab.tui.screens.style_select_dialog import (
+    DEFAULT_OPTION_ID as _STYLE_DEFAULT,
+    StyleSelectDialog,
+)
 from lazygitlab.tui.screens.syntax_select_dialog import (
     AUTO_OPTION_ID as _SYNTAX_AUTO,
     NONE_OPTION_ID as _SYNTAX_NONE,
@@ -81,6 +85,31 @@ _SYNTAX_COLORS: dict[Any, str] = {
     _Token.Generic.Inserted: "#50fa7b",
     _Token.Generic.Heading: "bold #f8f8f2",
 }
+
+
+def _build_colors_from_pygments_style(style_name: str) -> dict[Any, str]:
+    """Pygments 組み込みスタイルから Rich スタイル文字列マップを構築する。
+
+    変換できない場合は空 dict を返す（呼び出し元が _SYNTAX_COLORS にフォールバック）。
+    """
+    try:
+        from pygments.styles import get_style_by_name
+
+        style_cls = get_style_by_name(style_name)
+        colors: dict[Any, str] = {}
+        for token, style_def in style_cls:
+            parts: list[str] = []
+            if style_def["bold"]:
+                parts.append("bold")
+            if style_def["italic"]:
+                parts.append("italic")
+            if style_def["color"]:
+                parts.append(f"#{style_def['color']}")
+            if parts:
+                colors[token] = " ".join(parts)
+        return colors
+    except Exception:
+        return {}
 
 
 def _get_lexer_for_path(file_path: str | None) -> Any | None:
@@ -304,6 +333,7 @@ class ContentPanel(Widget):
         Binding("c", "add_comment", "Add Comment", priority=True),
         Binding("w", "toggle_wrap", "Wrap", priority=True),
         Binding("s", "select_syntax", "Syntax", priority=True),
+        Binding("p", "select_style", "Style", priority=True),
         Binding("a", "expand_all_lines", "All lines", priority=True),
         Binding("j", "diff_cursor_down", "Down", show=False),
         Binding("k", "diff_cursor_up", "Up", show=False),
@@ -334,6 +364,11 @@ class ContentPanel(Widget):
         self._wrap_lines: bool = False
         # シンタックスハイライト用レキサー
         self._syntax_lexer: Any | None = None
+        # Pygments カラースタイル（空文字 = 内蔵 Dracula パレット）
+        self._pygments_style: str = ""
+        self._syntax_colors: dict[Any, str] = _SYNTAX_COLORS
+        # スタイル変更時に呼び出すコールバック（config への保存用）
+        self._on_style_saved: Any = None
         # コメント閲覧用
         self._discussions: list[Discussion] = []
         self._comment_map: dict[int, list[Discussion]] = {}
@@ -395,6 +430,19 @@ class ContentPanel(Widget):
 
     def set_editor_command(self, editor_command: str) -> None:
         self._editor_command = editor_command
+
+    def set_pygments_style(self, style_name: str) -> None:
+        """Pygments カラースタイルを設定する。空文字は内蔵 Dracula パレットを使用。"""
+        self._pygments_style = style_name
+        if style_name:
+            built = _build_colors_from_pygments_style(style_name)
+            self._syntax_colors = built if built else _SYNTAX_COLORS
+        else:
+            self._syntax_colors = _SYNTAX_COLORS
+
+    def set_style_save_callback(self, callback: Any) -> None:
+        """スタイル選択後に呼び出す保存コールバックを設定する。"""
+        self._on_style_saved = callback
 
     # --- SBS スクロール同期 ---
 
@@ -870,6 +918,19 @@ class ContentPanel(Widget):
             return Text(text, style=style)
         return Text(text, style=style, no_wrap=True)
 
+    def _get_token_color(self, token_type: Any) -> str | None:
+        """インスタンスのカラーマップからトークンの Rich スタイル文字列を返す。"""
+        t = token_type
+        while t is not None:
+            color = self._syntax_colors.get(t)
+            if color is not None:
+                return color
+            parent = t.parent
+            if parent is t:
+                break
+            t = parent
+        return None
+
     def _code_cell(self, text: str, bg_style: str = "", has_diff_prefix: bool = False) -> Text:
         """シンタックスハイライト付きコードセルを返す。
 
@@ -893,7 +954,7 @@ class ContentPanel(Widget):
         for token_type, value in _pygments_lex(code, self._syntax_lexer):
             if not value:
                 continue
-            fg = _get_token_color(token_type)
+            fg = self._get_token_color(token_type)
             if fg and bg_style:
                 style = f"{fg} {bg_style}"
             elif fg:
@@ -1391,6 +1452,31 @@ class ContentPanel(Widget):
             self._focus_diff_table()
 
         await self.app.push_screen(SyntaxSelectDialog(current_name), _on_select)
+
+    async def action_select_style(self) -> None:
+        """Pygments カラースタイル選択ダイアログを開く。"""
+        if self._view_state not in (ContentViewState.DIFF, ContentViewState.OVERVIEW):
+            return
+
+        async def _on_style_select(style_id: str | None) -> None:
+            if style_id is None:
+                # キャンセル
+                if self._view_state == ContentViewState.DIFF:
+                    self._focus_diff_table()
+                return
+            if style_id == _STYLE_DEFAULT:
+                self.set_pygments_style("")
+            else:
+                self.set_pygments_style(style_id)
+            # コンフィグに保存
+            if self._on_style_saved is not None:
+                self._on_style_saved(self._pygments_style)
+            # 再描画
+            if self._view_state == ContentViewState.DIFF and self._current_diff_text:
+                self._render_diff()
+                self._focus_diff_table()
+
+        await self.app.push_screen(StyleSelectDialog(self._pygments_style), _on_style_select)
 
     def _focused_diff_table(self) -> DataTable | None:
         """現在フォーカスされている差分テーブルを返す。SBS では実際にフォーカスを持つ側を返す。"""

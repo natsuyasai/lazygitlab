@@ -13,6 +13,7 @@ from textual.widgets import Footer, Header
 
 from lazygitlab.infrastructure.git_detector import GitRepoDetector
 from lazygitlab.infrastructure.logger import get_logger
+from lazygitlab.infrastructure.config import ConfigManager
 from lazygitlab.models import AppConfig
 from lazygitlab.services import CommentService, GitLabClient, MRService
 from lazygitlab.services.exceptions import LazyGitLabAPIError
@@ -40,9 +41,15 @@ class LazyGitLabApp(App):
         Binding("left_square_bracket", "toggle_sidebar", "Toggle Sidebar"),
     ]
 
-    def __init__(self, config: AppConfig, initial_mr_id: int | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        config_manager: ConfigManager | None = None,
+        initial_mr_id: int | None = None,
+    ) -> None:
         super().__init__()
         self._config = config
+        self._config_manager = config_manager
         self._initial_mr_id = initial_mr_id
         self._sidebar_visible = True
         self._client: GitLabClient | None = None
@@ -98,6 +105,15 @@ class LazyGitLabApp(App):
         mr_panel = MRListPanel(self._mr_service, self._comment_service)
         content_panel = ContentPanel(self._mr_service, self._comment_service)
         content_panel.set_editor_command(self._config.editor)
+        if self._config.pygments_style:
+            content_panel.set_pygments_style(self._config.pygments_style)
+        if self._config_manager is not None:
+            config_manager = self._config_manager
+
+            def _save_style(style_name: str) -> None:
+                config_manager.save_setting("appearance", "pygments_style", style_name)
+
+            content_panel.set_style_save_callback(_save_style)
 
         await container.mount(mr_panel, content_panel)
 

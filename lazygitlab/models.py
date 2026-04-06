@@ -16,6 +16,8 @@ class AppConfig:
     log_level: str = "INFO"
     theme: str = "dark"
     remote_name: str = ""
+    ssl_verify: bool = True
+    pygments_style: str = ""
 
     def __post_init__(self) -> None:
         # 正規化: URLの末尾スラッシュを除去する

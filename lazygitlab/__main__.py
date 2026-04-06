@@ -38,7 +38,7 @@ def main() -> None:
 
         from lazygitlab.tui.app import LazyGitLabApp
 
-        app = LazyGitLabApp(config=config, initial_mr_id=args.mr_id)
+        app = LazyGitLabApp(config=config, config_manager=config_manager, initial_mr_id=args.mr_id)
         app.run()
 
     except KeyboardInterrupt:
