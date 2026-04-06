@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import getpass
 import os
 import sys
 import tomllib
@@ -206,7 +205,8 @@ class ConfigManager:
             break
 
         while True:
-            token = getpass.getpass("アクセストークン (glpat-...): ").strip()
+            print("アクセストークン (glpat-...): ", end="", flush=True)
+            token = input().strip()
             token_errors = self._validate_token(token)
             if token_errors:
                 for err in token_errors:

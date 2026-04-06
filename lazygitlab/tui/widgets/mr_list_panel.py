@@ -12,7 +12,7 @@ from textual.widgets import Tree
 from textual.widgets._tree import TreeNode
 
 from lazygitlab.infrastructure.logger import get_logger
-from lazygitlab.services import MRService
+from lazygitlab.services import CommentService, MRService
 from lazygitlab.services.exceptions import LazyGitLabAPIError
 from lazygitlab.services.types import MRCategory
 from lazygitlab.tui.entities import (
@@ -42,9 +42,10 @@ class MRListPanel(Widget):
     }
     """
 
-    def __init__(self, mr_service: MRService) -> None:
+    def __init__(self, mr_service: MRService, comment_service: CommentService) -> None:
         super().__init__()
         self._mr_service = mr_service
+        self._comment_service = comment_service
         self._category_pages: dict[MRCategory, int] = dict.fromkeys(MRCategory, 1)
         self._selected_mr_iid: int | None = None
         # mr_iid ではなくノードオブジェクト自体で追跡する
@@ -61,7 +62,7 @@ class MRListPanel(Widget):
         self.run_worker(self._load_all_categories(), exclusive=True)
 
     async def _load_all_categories(self) -> None:
-        """4カテゴリを並行取得してツリーを構築する。"""
+        """5カテゴリを並行取得してツリーを構築する。"""
         tree = self.query_one(Tree)
         tree.root.expand()
 
@@ -69,6 +70,7 @@ class MRListPanel(Widget):
         try:
             results = await asyncio.gather(
                 self._mr_service.get_assigned_to_me(page=1),
+                self._mr_service.get_reviewer_is_me(page=1),
                 self._mr_service.get_created_by_me(page=1),
                 self._mr_service.get_unassigned(page=1),
                 self._mr_service.get_assigned_to_others(page=1),
@@ -79,6 +81,7 @@ class MRListPanel(Widget):
 
         categories = [
             MRCategory.ASSIGNED_TO_ME,
+            MRCategory.REVIEWER_IS_ME,
             MRCategory.CREATED_BY_ME,
             MRCategory.UNASSIGNED,
             MRCategory.ASSIGNED_TO_OTHERS,
@@ -132,7 +135,11 @@ class MRListPanel(Widget):
         """MRノードを展開してファイル一覧を表示する。"""
         self.app.sub_title = f"Loading MR !{mr_iid}..."
         try:
-            changes = await self._mr_service.get_mr_changes(mr_iid)
+            changes, discussions = await asyncio.gather(
+                self._mr_service.get_mr_changes(mr_iid),
+                self._comment_service.get_discussions(mr_iid),
+                return_exceptions=False,
+            )
         except LazyGitLabAPIError as exc:
             _logger.error("Failed to load MR changes for !%d: %s", mr_iid, exc.message)
             self._loading_nodes.discard(node)
@@ -140,6 +147,14 @@ class MRListPanel(Widget):
             return
         finally:
             self.app.sub_title = ""
+
+        # インラインコメントがあるファイルパスを収集する
+        # file_path が空文字の場合は追加しない（new_file の old_path="" などと誤マッチを防ぐ）
+        comment_files: set[str] = set()
+        for disc in discussions:
+            for note in disc.notes:
+                if note.position is not None and note.position.file_path:
+                    comment_files.add(note.position.file_path)
 
         self._expanded_nodes.add(node)
         self._loading_nodes.discard(node)
@@ -158,6 +173,10 @@ class MRListPanel(Widget):
                 deleted_file=change.deleted_file,
                 renamed_file=change.renamed_file,
             )
+            if change.new_path in comment_files or (
+                change.old_path and change.old_path in comment_files
+            ):
+                label = "💬 " + label
             node.add_leaf(
                 label,
                 data=TreeNodeData(

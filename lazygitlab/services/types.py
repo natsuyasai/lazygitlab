@@ -12,6 +12,7 @@ class MRCategory(Enum):
     """MR一覧のカテゴリ分類。"""
 
     ASSIGNED_TO_ME = "assigned_to_me"
+    REVIEWER_IS_ME = "reviewer_is_me"
     CREATED_BY_ME = "created_by_me"
     UNASSIGNED = "unassigned"
     ASSIGNED_TO_OTHERS = "assigned_to_others"

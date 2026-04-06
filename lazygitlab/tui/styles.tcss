@@ -128,3 +128,31 @@ CommentViewDialog {
     width: 1fr;
     height: 100%;
 }
+
+/* SyntaxSelectDialog */
+SyntaxSelectDialog {
+    align: center middle;
+}
+
+#syntax-select-container {
+    width: 60%;
+    height: 70%;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+#syntax-select-subtitle {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#syntax-option-list {
+    height: 1fr;
+    border: solid $primary-darken-2;
+    margin-bottom: 1;
+}
+
+#syntax-select-hint {
+    color: $text-muted;
+}

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import re
-from typing import ClassVar
+from typing import Any, ClassVar
 
+from pygments import lex as _pygments_lex
+from pygments.lexers import get_lexer_for_filename as _get_lexer_for_filename
+from pygments.token import Token as _Token
+from pygments.util import ClassNotFound as _ClassNotFound
 from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
 from textual.app import ComposeResult
@@ -22,6 +26,11 @@ from lazygitlab.tui.messages import CommentPosted, ShowDiff, ShowOverview
 from lazygitlab.tui.screens.comment_dialog import CommentDialog
 from lazygitlab.tui.screens.comment_view_dialog import CommentViewDialog
 from lazygitlab.tui.screens.error_dialog import ErrorDialog
+from lazygitlab.tui.screens.syntax_select_dialog import (
+    AUTO_OPTION_ID as _SYNTAX_AUTO,
+    NONE_OPTION_ID as _SYNTAX_NONE,
+    SyntaxSelectDialog,
+)
 
 _logger = get_logger(__name__)
 
@@ -34,8 +43,8 @@ _DIFF_GAP_STYLE = "dim italic"
 # ±コンテキスト行数（デフォルト表示する変更行前後の行数）
 _CONTEXT_LINES = 5
 
-# 行番号列の幅（💬マーカー(2セル) + 最大4桁 = 6、余裕を持たせ7）
-_LINE_NO_WIDTH = 7
+# 行番号列の幅（最大4桁 + 💬マーカー(2セル) = 6）
+_LINE_NO_WIDTH = 6
 
 # top/bottom ロード行のギャップ範囲センチネル値
 _TOP_LOAD_SENTINEL = (-1, -1)
@@ -43,6 +52,59 @@ _BOTTOM_LOAD_SENTINEL = (-2, -2)
 
 # 一度に追加読み込みする行数
 _LOAD_MORE_LINES = 10
+
+# シンタックスハイライト用カラーマッピング（Dracula テーマ準拠）
+_SYNTAX_COLORS: dict[Any, str] = {
+    _Token.Keyword: "bold #ff79c6",
+    _Token.Keyword.Constant: "#bd93f9",
+    _Token.Keyword.Type: "#8be9fd",
+    _Token.Keyword.Namespace: "bold #ff79c6",
+    _Token.String: "#f1fa8c",
+    _Token.String.Escape: "#ff79c6",
+    _Token.String.Interpol: "#ff79c6",
+    _Token.String.Doc: "#6272a4",
+    _Token.Comment: "#6272a4",
+    _Token.Name.Builtin: "#8be9fd",
+    _Token.Name.Function: "#50fa7b",
+    _Token.Name.Function.Magic: "#50fa7b",
+    _Token.Name.Class: "#8be9fd",
+    _Token.Name.Decorator: "#50fa7b",
+    _Token.Name.Exception: "#ff5555",
+    _Token.Name.Constant: "#bd93f9",
+    _Token.Name.Namespace: "#8be9fd",
+    _Token.Name.Attribute: "#50fa7b",
+    _Token.Literal.Number: "#bd93f9",
+    _Token.Operator: "#ff79c6",
+    _Token.Operator.Word: "bold #ff79c6",
+    _Token.Punctuation: "#f8f8f2",
+    _Token.Generic.Deleted: "#ff5555",
+    _Token.Generic.Inserted: "#50fa7b",
+    _Token.Generic.Heading: "bold #f8f8f2",
+}
+
+
+def _get_lexer_for_path(file_path: str | None) -> Any | None:
+    """ファイルパスから Pygments レキサーを返す。対応言語なければ None。"""
+    if not file_path:
+        return None
+    try:
+        return _get_lexer_for_filename(file_path, stripnl=True)
+    except _ClassNotFound:
+        return None
+
+
+def _get_token_color(token_type: Any) -> str | None:
+    """Pygments トークンタイプを親クラスまで辿り、Rich スタイル文字列を返す。"""
+    t = token_type
+    while t is not None:
+        color = _SYNTAX_COLORS.get(t)
+        if color is not None:
+            return color
+        parent = t.parent
+        if parent is t:
+            break
+        t = parent
+    return None
 
 
 def _format_diff_line(line: str) -> str:
@@ -86,6 +148,14 @@ def _build_comment_map(discussions: list[Discussion]) -> dict[int, list[Discussi
     return result
 
 
+_IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+
+
+def _extract_images(text: str) -> list[tuple[str, str]]:
+    """Markdownテキストから画像リンクを抽出して (alt, url) リストを返す。"""
+    return _IMAGE_PATTERN.findall(text)
+
+
 def _build_overview_text(mr_detail, discussions: list[Discussion]) -> str:
     """MR詳細とディスカッションからOverview表示テキストを構築する。"""
     lines: list[str] = []
@@ -107,6 +177,22 @@ def _build_overview_text(mr_detail, discussions: list[Discussion]) -> str:
     lines.append("")
     lines.append(mr_detail.description or "(no description)")
     lines.append("")
+
+    # 説明文・ディスカッション内の画像URLを収集して表示
+    all_images: list[tuple[str, str]] = []
+    if mr_detail.description:
+        all_images.extend(_extract_images(mr_detail.description))
+    for disc in discussions:
+        for note in disc.notes:
+            all_images.extend(_extract_images(note.body))
+    if all_images:
+        lines.append(f"## Images ({len(all_images)})")
+        lines.append("")
+        for alt, url in all_images:
+            label = alt if alt else url
+            lines.append(f"- [{label}]({url})")
+        lines.append("")
+
     lines.append(f"## Discussions ({len(discussions)})")
     for disc in discussions:
         for i, note in enumerate(disc.notes):
@@ -217,6 +303,12 @@ class ContentPanel(Widget):
         Binding("t", "toggle_diff_mode", "Toggle unified/side-by-side", priority=True),
         Binding("c", "add_comment", "Add Comment", priority=True),
         Binding("w", "toggle_wrap", "Wrap", priority=True),
+        Binding("s", "select_syntax", "Syntax", priority=True),
+        Binding("a", "expand_all_lines", "All lines", priority=True),
+        Binding("j", "diff_cursor_down", "Down", show=False),
+        Binding("k", "diff_cursor_up", "Up", show=False),
+        Binding("h", "diff_scroll_left", "Left", show=False),
+        Binding("l", "diff_scroll_right", "Right", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -240,6 +332,8 @@ class ContentPanel(Widget):
         self._comment_lines: set[int] = set()
         self._editor_command: str = "vi"
         self._wrap_lines: bool = False
+        # シンタックスハイライト用レキサー
+        self._syntax_lexer: Any | None = None
         # コメント閲覧用
         self._discussions: list[Discussion] = []
         self._comment_map: dict[int, list[Discussion]] = {}
@@ -248,14 +342,17 @@ class ContentPanel(Widget):
         self._full_parsed_diff: list[tuple[str, int | None, int | None, str]] = []
         self._forced_ctx_indices: set[int] = set()
         self._gap_row_ranges: dict[int, tuple[int, int]] = {}
+        # gap行のアクション種別 ("all"|"above"|"below"|"top_load"|"bottom_load"
+        #                       |"inter_above"|"inter_below"|"inter_all")
+        self._gap_row_actions: dict[int, str] = {}
+        # ハンク間ギャップの読み込み状態: (prev_end, next_start) -> (above_count, below_count)
+        self._inter_hunk_loaded: dict[tuple[int, int], tuple[int, int]] = {}
         # ファイル上下追加読み込み用
         self._file_content: list[str] = []
         self._top_extra_count: int = 0
         self._bottom_extra_count: int = 0
         self._first_diff_new_line: int = 0
         self._last_diff_new_line: int = 0
-        # SBS スクロール同期用
-        self._syncing_scroll_x: bool = False
 
     def compose(self) -> ComposeResult:
         yield Static("Select an MR from the list.", id="empty-hint")
@@ -275,31 +372,47 @@ class ContentPanel(Widget):
         table.display = False
         self.query_one("#sbs-container").display = False
 
-        # SBS モードの横スクロール同期を設定する
+        # SBS モードの横・縦スクロール同期を設定する
         left = self.query_one("#diff-table-left", DataTable)
         right = self.query_one("#diff-table-right", DataTable)
 
-        def _sync_right(value: float) -> None:
-            self._sync_sbs_scroll_x(right, value)
+        def _sync_right_x(value: float) -> None:
+            self._sync_sbs_scroll(right, "scroll_target_x", value)
 
-        def _sync_left(value: float) -> None:
-            self._sync_sbs_scroll_x(left, value)
+        def _sync_left_x(value: float) -> None:
+            self._sync_sbs_scroll(left, "scroll_target_x", value)
 
-        self.watch(left, "scroll_x", _sync_right, init=False)
-        self.watch(right, "scroll_x", _sync_left, init=False)
+        def _sync_right_y(value: float) -> None:
+            self._sync_sbs_scroll(right, "scroll_target_y", value)
+
+        def _sync_left_y(value: float) -> None:
+            self._sync_sbs_scroll(left, "scroll_target_y", value)
+
+        self.watch(left, "scroll_target_x", _sync_right_x, init=False)
+        self.watch(right, "scroll_target_x", _sync_left_x, init=False)
+        self.watch(left, "scroll_target_y", _sync_right_y, init=False)
+        self.watch(right, "scroll_target_y", _sync_left_y, init=False)
 
     def set_editor_command(self, editor_command: str) -> None:
         self._editor_command = editor_command
 
     # --- SBS スクロール同期 ---
 
-    def _sync_sbs_scroll_x(self, target: DataTable, value: float) -> None:
-        """SBS モードで対向テーブルの横スクロールを同期する。"""
-        if self._diff_mode != DiffViewMode.SIDE_BY_SIDE or self._syncing_scroll_x:
+    def _sync_sbs_scroll(self, target: DataTable, attr: str, value: float) -> None:
+        """SBS モードで対向テーブルのスクロール位置を同期する。
+
+        scroll_target_* を setattr するだけでは scroll_y（実描画位置）が更新されない。
+        scroll_to(animate=False) を使うことで scroll_target と scroll_y を同時に設定する。
+        値が既に一致する場合はループを防ぐため何もしない。
+        """
+        if self._diff_mode != DiffViewMode.SIDE_BY_SIDE:
             return
-        self._syncing_scroll_x = True
-        target.scroll_x = value
-        self._syncing_scroll_x = False
+        if attr == "scroll_target_x":
+            if target.scroll_target_x != value:
+                target.scroll_to(x=value, animate=False)
+        elif attr == "scroll_target_y":
+            if target.scroll_target_y != value:
+                target.scroll_to(y=value, animate=False)
 
     # --- メッセージハンドラ ---
 
@@ -332,13 +445,18 @@ class ContentPanel(Widget):
             if line_no is not None:
                 self._selected_line = line_no
 
-        if self._diff_mode == DiffViewMode.SIDE_BY_SIDE:
+        # フォーカスされているテーブルからのイベントのみ対向テーブルを同期する。
+        # プログラムによる move_cursor が発する RowHighlighted は has_focus=False なので
+        # ここに入らず、無限ループを防ぐ。
+        if self._diff_mode == DiffViewMode.SIDE_BY_SIDE and event.data_table.has_focus:
             source = event.data_table
             try:
                 left = self.query_one("#diff-table-left", DataTable)
                 right = self.query_one("#diff-table-right", DataTable)
                 other = right if source is left else left
-                other.move_cursor(row=row_idx, animate=False)
+                # scroll=False: スクロール同期は scroll_target_y の watch で行うため
+                # ここで scroll_to_region を呼ぶと干渉してビューが跳ぶ
+                other.move_cursor(row=row_idx, animate=False, scroll=False)
             except Exception as e:
                 _logger.debug(f"Failed to sync cursor in SBS mode: {e}")
 
@@ -352,11 +470,22 @@ class ContentPanel(Widget):
         row_idx = event.cursor_row
 
         if row_idx in self._gap_row_ranges:
-            start, _end = self._gap_row_ranges[row_idx]
-            if start == -1:  # top_load
+            start, end = self._gap_row_ranges[row_idx]
+            action = self._gap_row_actions.get(row_idx, "all")
+            if action == "top_load":
                 self.run_worker(self._load_more_top(), exclusive=True)
-            elif start == -2:  # bottom_load
+            elif action == "bottom_load":
                 self.run_worker(self._load_more_bottom(), exclusive=True)
+            elif action == "above":
+                self._expand_gap_above(start, end)
+            elif action == "below":
+                self._expand_gap_below(start, end)
+            elif action == "inter_above":
+                self.run_worker(self._load_inter_hunk_above(start, end), exclusive=False)
+            elif action == "inter_below":
+                self.run_worker(self._load_inter_hunk_below(start, end), exclusive=False)
+            elif action == "inter_all":
+                self.run_worker(self._load_inter_hunk_all(start, end), exclusive=False)
             else:
                 self._expand_gap(row_idx)
             return
@@ -381,8 +510,12 @@ class ContentPanel(Widget):
             )
             text = _build_overview_text(mr_detail, discussions)
             log.clear()
-            log.write(RichMarkdown(text))
+            # scroll_end=False で末尾自動スクロールを抑制する。
+            # write() は描画をリフレッシュまで遅延するため、先頭スクロールも
+            # call_after_refresh で描画完了後に実行する。
+            log.write(RichMarkdown(text), scroll_end=False)
             self._view_state = ContentViewState.OVERVIEW
+            self.call_after_refresh(log.scroll_home, animate=False)
             log.focus()
         except LazyGitLabAPIError as exc:
             _logger.error("Failed to load overview for !%d: %s", mr_iid, exc.message)
@@ -400,9 +533,11 @@ class ContentPanel(Widget):
         self._diff_row_lines = []
         self._selected_line = None
         self._forced_ctx_indices = set()
+        self._inter_hunk_loaded = {}
         self._file_content = []
         self._top_extra_count = 0
         self._bottom_extra_count = 0
+        self._syntax_lexer = _get_lexer_for_path(file_path)
         try:
             file_diff, discussions = await _gather_two(
                 self._mr_service.get_mr_diff(mr_iid, file_path),
@@ -452,10 +587,7 @@ class ContentPanel(Widget):
             return
         self._top_extra_count += _LOAD_MORE_LINES
         self._render_diff()
-        if self._diff_mode == DiffViewMode.UNIFIED:
-            self.query_one("#diff-table", DataTable).focus()
-        else:
-            self.query_one("#diff-table-left", DataTable).focus()
+        self._focus_diff_table()
 
     async def _load_more_bottom(self) -> None:
         """差分下部に 10 行追加読み込みして再描画する。"""
@@ -465,10 +597,54 @@ class ContentPanel(Widget):
             return
         self._bottom_extra_count += _LOAD_MORE_LINES
         self._render_diff()
-        if self._diff_mode == DiffViewMode.UNIFIED:
-            self.query_one("#diff-table", DataTable).focus()
-        else:
-            self.query_one("#diff-table-left", DataTable).focus()
+        self._focus_diff_table()
+
+    async def _load_inter_hunk_above(self, prev_end: int, next_start: int) -> None:
+        """ハンク間ギャップの上側 _LOAD_MORE_LINES 行を読み込んで再描画する。"""
+        if not self._file_content:
+            await self._fetch_file_content()
+        if not self._file_content:
+            return
+        key = (prev_end, next_start)
+        above_count, below_count = self._inter_hunk_loaded.get(key, (0, 0))
+        total_gap = next_start - prev_end - 1
+        remaining = total_gap - above_count - below_count
+        n = min(_LOAD_MORE_LINES, remaining)
+        if n > 0:
+            self._inter_hunk_loaded[key] = (above_count + n, below_count)
+        self._render_diff()
+        self._focus_diff_table()
+
+    async def _load_inter_hunk_below(self, prev_end: int, next_start: int) -> None:
+        """ハンク間ギャップの下側 _LOAD_MORE_LINES 行を読み込んで再描画する。"""
+        if not self._file_content:
+            await self._fetch_file_content()
+        if not self._file_content:
+            return
+        key = (prev_end, next_start)
+        above_count, below_count = self._inter_hunk_loaded.get(key, (0, 0))
+        total_gap = next_start - prev_end - 1
+        remaining = total_gap - above_count - below_count
+        n = min(_LOAD_MORE_LINES, remaining)
+        if n > 0:
+            self._inter_hunk_loaded[key] = (above_count, below_count + n)
+        self._render_diff()
+        self._focus_diff_table()
+
+    async def _load_inter_hunk_all(self, prev_end: int, next_start: int) -> None:
+        """ハンク間ギャップの残り全行を読み込んで再描画する。"""
+        if not self._file_content:
+            await self._fetch_file_content()
+        if not self._file_content:
+            return
+        key = (prev_end, next_start)
+        above_count, below_count = self._inter_hunk_loaded.get(key, (0, 0))
+        total_gap = next_start - prev_end - 1
+        remaining = total_gap - above_count - below_count
+        if remaining > 0:
+            self._inter_hunk_loaded[key] = (above_count + remaining, below_count)
+        self._render_diff()
+        self._focus_diff_table()
 
     # --- 表示切替ヘルパー ---
 
@@ -489,6 +665,80 @@ class ContentPanel(Widget):
             self.query_one("#sbs-container").display = True
 
     # --- 差分レンダラー ---
+
+    def _add_inter_hunk_rows(
+        self,
+        rows: list[tuple[str, int | None, int | None, str]],
+    ) -> list[tuple[str, int | None, int | None, str]]:
+        """ハンクヘッダー間の省略行に読み込みエントリを挿入する。
+
+        @@ ヘッダーを検出し、前のハンクの最終行番号と次のハンクの開始行番号の間に
+        省略行がある場合、inter_above / inter_below / inter_all エントリを挿入する。
+        エントリの old_n / new_n には prev_end / next_start（新ファイル行番号）を格納する。
+        読み込み済みの行は ctx 行として展開して挿入する。
+        """
+        result: list[tuple[str, int | None, int | None, str]] = []
+        last_new_no = 0  # 最後に確認した新ファイル行番号
+
+        for entry in rows:
+            t, old_n, new_n, text = entry
+
+            if t == "hunk":
+                m = re.search(r"\+(\d+)", text)
+                if m:
+                    hunk_start = int(m.group(1))
+                    if last_new_no > 0 and hunk_start > last_new_no + 1:
+                        prev_end = last_new_no
+                        next_start = hunk_start
+                        key = (prev_end, next_start)
+                        above_count, below_count = self._inter_hunk_loaded.get(key, (0, 0))
+                        total_gap = next_start - prev_end - 1
+                        above_count = min(above_count, total_gap)
+                        below_count = min(below_count, total_gap - above_count)
+                        remaining = total_gap - above_count - below_count
+
+                        # 上側読み込み済み行を挿入
+                        for i in range(above_count):
+                            line_no = prev_end + 1 + i
+                            if 1 <= line_no <= len(self._file_content):
+                                result.append((
+                                    "ctx", line_no, line_no,
+                                    " " + self._file_content[line_no - 1],
+                                ))
+
+                        # 省略行の読み込みエントリを挿入
+                        if remaining > 0:
+                            if remaining > _LOAD_MORE_LINES:
+                                result.append((
+                                    "inter_above", prev_end, next_start,
+                                    f"··· ↑ {_LOAD_MORE_LINES} lines above (Enter) ···",
+                                ))
+                                result.append((
+                                    "inter_below", prev_end, next_start,
+                                    f"··· ↓ {_LOAD_MORE_LINES} lines below (Enter) ···",
+                                ))
+                            else:
+                                result.append((
+                                    "inter_all", prev_end, next_start,
+                                    f"··· {remaining} lines hidden (Enter to expand) ···",
+                                ))
+
+                        # 下側読み込み済み行を挿入（next_start に近い順）
+                        for i in range(below_count - 1, -1, -1):
+                            line_no = next_start - 1 - i
+                            if 1 <= line_no <= len(self._file_content):
+                                result.append((
+                                    "ctx", line_no, line_no,
+                                    " " + self._file_content[line_no - 1],
+                                ))
+
+            # ctx/add 行のみ新ファイル行番号を更新する（gap などの擬似行番号は除外）
+            if t in ("ctx", "add") and new_n is not None:
+                last_new_no = new_n
+
+            result.append(entry)
+
+        return result
 
     def _build_augmented_rows(
         self,
@@ -522,12 +772,11 @@ class ContentPanel(Widget):
                     f"··· load {_LOAD_MORE_LINES} more lines above (Enter) ···",
                 ))
 
-        # --- 通常の diff 行（context フィルタ済み） ---
-        result.extend(
-            _apply_context_filter(
-                self._full_parsed_diff, _CONTEXT_LINES, self._forced_ctx_indices
-            )
+        # --- 通常の diff 行（context フィルタ済み + ハンク間ギャップ挿入） ---
+        filtered = _apply_context_filter(
+            self._full_parsed_diff, _CONTEXT_LINES, self._forced_ctx_indices
         )
+        result.extend(self._add_inter_hunk_rows(filtered))
 
         # --- 末尾の追加読み込み行 ---
         if self._last_diff_new_line > 0:
@@ -552,10 +801,46 @@ class ContentPanel(Widget):
 
         return result
 
+    def _row_for_line(self, line_no: int) -> int | None:
+        """新ファイル行番号に最も近いテーブル行インデックスを返す。"""
+        best_row: int | None = None
+        best_dist = float("inf")
+        for row_idx, ln in enumerate(self._diff_row_lines):
+            if ln is None:
+                continue
+            dist = abs(ln - line_no)
+            if dist < best_dist:
+                best_dist = dist
+                best_row = row_idx
+        return best_row
+
+    def _focus_diff_table(self) -> None:
+        """現在の差分モードに応じてテーブルにフォーカスし、カーソルを直前の選択行に復元する。"""
+        target_row: int | None = None
+        if self._selected_line is not None:
+            target_row = self._row_for_line(self._selected_line)
+
+        if self._diff_mode == DiffViewMode.UNIFIED:
+            table = self.query_one("#diff-table", DataTable)
+            table.focus()
+            if target_row is not None:
+                table.move_cursor(row=target_row, animate=False)
+        else:
+            left = self.query_one("#diff-table-left", DataTable)
+            right = self.query_one("#diff-table-right", DataTable)
+            left.focus()
+            if target_row is not None:
+                # 両テーブルを直接移動する。
+                # right は has_focus=False なので on_data_table_row_highlighted が
+                # 呼ばれても同期ループにはならない。
+                left.move_cursor(row=target_row, animate=False, scroll=False)
+                right.move_cursor(row=target_row, animate=False, scroll=False)
+
     def _render_diff(self) -> None:
         """現在の状態で差分を DataTable にレンダリングする（ネットワークアクセスなし）。"""
         self._diff_row_lines = []
         self._gap_row_ranges = {}
+        self._gap_row_actions = {}
         rows = self._build_augmented_rows()
 
         table = self.query_one("#diff-table", DataTable)
@@ -585,6 +870,40 @@ class ContentPanel(Widget):
             return Text(text, style=style)
         return Text(text, style=style, no_wrap=True)
 
+    def _code_cell(self, text: str, bg_style: str = "", has_diff_prefix: bool = False) -> Text:
+        """シンタックスハイライト付きコードセルを返す。
+
+        レキサーが未設定の場合は _content_cell にフォールバックする。
+        has_diff_prefix=True のとき、先頭の +/-/space をプレフィックスとして扱い
+        それ以降の文字列をハイライト対象にする。
+        """
+        if self._syntax_lexer is None:
+            return self._content_cell(text, bg_style)
+
+        prefix_char = ""
+        code = text
+        if has_diff_prefix and text:
+            prefix_char = text[0]
+            code = text[1:]
+
+        result = Text(no_wrap=not self._wrap_lines)
+        if prefix_char:
+            result.append(prefix_char, style=bg_style)
+
+        for token_type, value in _pygments_lex(code, self._syntax_lexer):
+            if not value:
+                continue
+            fg = _get_token_color(token_type)
+            if fg and bg_style:
+                style = f"{fg} {bg_style}"
+            elif fg:
+                style = fg
+            else:
+                style = bg_style or ""
+            result.append(value, style=style)
+
+        return result
+
     def _row_height(self) -> int | None:
         """折り返しモード時は None（自動検出）、通常は 1 を返す。"""
         return None if self._wrap_lines else 1
@@ -599,59 +918,132 @@ class ContentPanel(Widget):
         row_height = self._row_height()
 
         for t, old_n, new_n, text in rows:
-            if t in ("gap", "top_load", "bottom_load"):
-                self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
-                table.add_row(
-                    Text("···", style=_DIFF_GAP_STYLE),
-                    Text("···", style=_DIFF_GAP_STYLE),
-                    self._content_cell(text, _DIFF_GAP_STYLE),
-                    key=f"gap_{row_idx}",
-                    height=1,
+            if t in ("gap", "top_load", "bottom_load", "inter_above", "inter_below", "inter_all"):
+                gap_size = (
+                    (new_n - old_n + 1)
+                    if (t == "gap" and old_n is not None and new_n is not None)
+                    else 0
                 )
-                self._diff_row_lines.append(None)
-            elif t == "hunk":
-                table.add_row(
-                    Text("", style=_DIFF_HUNK_STYLE),
-                    Text("", style=_DIFF_HUNK_STYLE),
-                    self._content_cell(text, _DIFF_HUNK_STYLE),
-                    key=f"hunk_{row_idx}",
-                    height=row_height,
-                )
-                self._diff_row_lines.append(None)
-            elif t == "header":
-                table.add_row(
-                    "", "", self._content_cell(text, "dim"), key=f"hdr_{row_idx}",
-                    height=row_height,
-                )
-                self._diff_row_lines.append(None)
+                if t == "inter_above":
+                    self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                    self._gap_row_actions[row_idx] = "inter_above"
+                    table.add_row(
+                        Text("↑", style=_DIFF_GAP_STYLE),
+                        Text("↑", style=_DIFF_GAP_STYLE),
+                        self._content_cell(text, _DIFF_GAP_STYLE),
+                        key=f"gap_{row_idx}", height=1,
+                    )
+                    self._diff_row_lines.append(None)
+                elif t == "inter_below":
+                    self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                    self._gap_row_actions[row_idx] = "inter_below"
+                    table.add_row(
+                        Text("↓", style=_DIFF_GAP_STYLE),
+                        Text("↓", style=_DIFF_GAP_STYLE),
+                        self._content_cell(text, _DIFF_GAP_STYLE),
+                        key=f"gap_{row_idx}", height=1,
+                    )
+                    self._diff_row_lines.append(None)
+                elif t == "inter_all":
+                    self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                    self._gap_row_actions[row_idx] = "inter_all"
+                    table.add_row(
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        self._content_cell(text, _DIFF_GAP_STYLE),
+                        key=f"gap_{row_idx}", height=1,
+                    )
+                    self._diff_row_lines.append(None)
+                elif t == "top_load":
+                    self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                    self._gap_row_actions[row_idx] = "top_load"
+                    table.add_row(
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        self._content_cell(text, _DIFF_GAP_STYLE),
+                        key=f"gap_{row_idx}",
+                        height=1,
+                    )
+                    self._diff_row_lines.append(None)
+                elif t == "bottom_load":
+                    self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                    self._gap_row_actions[row_idx] = "bottom_load"
+                    table.add_row(
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        self._content_cell(text, _DIFF_GAP_STYLE),
+                        key=f"gap_{row_idx}",
+                        height=1,
+                    )
+                    self._diff_row_lines.append(None)
+                elif gap_size > _LOAD_MORE_LINES:
+                    # 大きいギャップ → 上側・下側の2行に分割
+                    above_text = f"··· ↑ {_LOAD_MORE_LINES} lines above (Enter) ···"
+                    below_text = f"··· ↓ {_LOAD_MORE_LINES} lines below (Enter) ···"
+                    self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                    self._gap_row_actions[row_idx] = "above"
+                    table.add_row(
+                        Text("↑", style=_DIFF_GAP_STYLE),
+                        Text("↑", style=_DIFF_GAP_STYLE),
+                        self._content_cell(above_text, _DIFF_GAP_STYLE),
+                        key=f"gap_{row_idx}",
+                        height=1,
+                    )
+                    self._diff_row_lines.append(None)
+                    row_idx += 1
+                    self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                    self._gap_row_actions[row_idx] = "below"
+                    table.add_row(
+                        Text("↓", style=_DIFF_GAP_STYLE),
+                        Text("↓", style=_DIFF_GAP_STYLE),
+                        self._content_cell(below_text, _DIFF_GAP_STYLE),
+                        key=f"gap_{row_idx}",
+                        height=1,
+                    )
+                    self._diff_row_lines.append(None)
+                else:
+                    # 小さいギャップ → 全展開1行
+                    self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                    self._gap_row_actions[row_idx] = "all"
+                    table.add_row(
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        Text("···", style=_DIFF_GAP_STYLE),
+                        self._content_cell(text, _DIFF_GAP_STYLE),
+                        key=f"gap_{row_idx}",
+                        height=1,
+                    )
+                    self._diff_row_lines.append(None)
+            elif t in ("hunk", "header"):
+                # @@ ハンクヘッダーとファイルヘッダーは表示しない（行番号で代替可能）
+                continue
             elif t == "add":
-                no_label = f"💬{new_n}" if new_n in self._comment_lines else str(new_n)
+                no_label = f"{new_n}💬" if new_n in self._comment_lines else str(new_n)
                 table.add_row(
                     Text("", style=_DIFF_ADD_STYLE),
                     Text(no_label, style=_DIFF_ADD_STYLE),
-                    self._content_cell(text, _DIFF_ADD_STYLE),
+                    self._code_cell(text, _DIFF_ADD_STYLE, has_diff_prefix=True),
                     key=f"add_{row_idx}",
                     height=row_height,
                 )
                 self._diff_row_lines.append(new_n)
             elif t == "rem":
-                no_label = f"💬{old_n}" if old_n in self._comment_lines else str(old_n)
+                no_label = f"{old_n}💬" if old_n in self._comment_lines else str(old_n)
                 table.add_row(
                     Text(no_label, style=_DIFF_REM_STYLE),
                     Text("", style=_DIFF_REM_STYLE),
-                    self._content_cell(text, _DIFF_REM_STYLE),
+                    self._code_cell(text, _DIFF_REM_STYLE, has_diff_prefix=True),
                     key=f"rem_{row_idx}",
                     height=row_height,
                 )
                 self._diff_row_lines.append(None)
             else:  # ctx
-                no_label = f"💬{new_n}" if new_n in self._comment_lines else (
+                no_label = f"{new_n}💬" if new_n in self._comment_lines else (
                     str(new_n) if new_n is not None else ""
                 )
                 table.add_row(
                     str(old_n) if old_n is not None else "",
                     no_label,
-                    self._content_cell(text),
+                    self._code_cell(text, has_diff_prefix=True),
                     key=f"ctx_{row_idx}",
                     height=row_height,
                 )
@@ -680,22 +1072,22 @@ class ContentPanel(Widget):
                 old_n2, old_t = pending_rem[k] if k < len(pending_rem) else (None, "")
                 new_n2, new_t = pending_add[k] if k < len(pending_add) else (None, "")
                 left_no = (
-                    f"💬{old_n2}" if old_n2 and old_n2 in self._comment_lines
+                    f"{old_n2}💬" if old_n2 and old_n2 in self._comment_lines
                     else (str(old_n2) if old_n2 else "")
                 )
                 right_no = (
-                    f"💬{new_n2}" if new_n2 and new_n2 in self._comment_lines
+                    f"{new_n2}💬" if new_n2 and new_n2 in self._comment_lines
                     else (str(new_n2) if new_n2 else "")
                 )
                 left.add_row(
                     Text(left_no, style=_DIFF_REM_STYLE if old_t else ""),
-                    self._content_cell(old_t, _DIFF_REM_STYLE if old_t else ""),
+                    self._code_cell(old_t, _DIFF_REM_STYLE if old_t else ""),
                     key=f"sbs_l_{row_idx}",
                     height=row_height,
                 )
                 right.add_row(
                     Text(right_no, style=_DIFF_ADD_STYLE if new_t else ""),
-                    self._content_cell(new_t, _DIFF_ADD_STYLE if new_t else ""),
+                    self._code_cell(new_t, _DIFF_ADD_STYLE if new_t else ""),
                     key=f"sbs_r_{row_idx}",
                     height=row_height,
                 )
@@ -711,60 +1103,146 @@ class ContentPanel(Widget):
                 pending_add.append((new_n, text[1:] if text.startswith("+") else text))
             else:
                 _flush()
-                if t in ("gap", "top_load", "bottom_load"):
-                    self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
-                    left.add_row(
-                        Text("···", style=_DIFF_GAP_STYLE),
-                        self._content_cell(text, _DIFF_GAP_STYLE),
-                        key=f"gap_l_{row_idx}",
-                        height=1,
+                if t in ("gap", "top_load", "bottom_load", "inter_above", "inter_below", "inter_all"):
+                    gap_size = (
+                        (new_n - old_n + 1)
+                        if (t == "gap" and old_n is not None and new_n is not None)
+                        else 0
                     )
-                    right.add_row(
-                        Text("···", style=_DIFF_GAP_STYLE),
-                        self._content_cell(text, _DIFF_GAP_STYLE),
-                        key=f"gap_r_{row_idx}",
-                        height=1,
-                    )
-                    self._diff_row_lines.append(None)
-                elif t == "hunk":
-                    left.add_row(
-                        Text("", style=_DIFF_HUNK_STYLE),
-                        self._content_cell(text, _DIFF_HUNK_STYLE),
-                        key=f"hunk_l_{row_idx}",
-                        height=row_height,
-                    )
-                    right.add_row(
-                        Text("", style=_DIFF_HUNK_STYLE),
-                        self._content_cell(text, _DIFF_HUNK_STYLE),
-                        key=f"hunk_r_{row_idx}",
-                        height=row_height,
-                    )
-                    self._diff_row_lines.append(None)
-                elif t == "header":
-                    left.add_row(
-                        "", self._content_cell(text, "dim"), key=f"hdr_l_{row_idx}",
-                        height=row_height,
-                    )
-                    right.add_row(
-                        "", self._content_cell(text, "dim"), key=f"hdr_r_{row_idx}",
-                        height=row_height,
-                    )
-                    self._diff_row_lines.append(None)
+                    if t == "inter_above":
+                        self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                        self._gap_row_actions[row_idx] = "inter_above"
+                        left.add_row(
+                            Text("↑", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_l_{row_idx}", height=1,
+                        )
+                        right.add_row(
+                            Text("↑", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_r_{row_idx}", height=1,
+                        )
+                        self._diff_row_lines.append(None)
+                    elif t == "inter_below":
+                        self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                        self._gap_row_actions[row_idx] = "inter_below"
+                        left.add_row(
+                            Text("↓", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_l_{row_idx}", height=1,
+                        )
+                        right.add_row(
+                            Text("↓", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_r_{row_idx}", height=1,
+                        )
+                        self._diff_row_lines.append(None)
+                    elif t == "inter_all":
+                        self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                        self._gap_row_actions[row_idx] = "inter_all"
+                        left.add_row(
+                            Text("···", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_l_{row_idx}", height=1,
+                        )
+                        right.add_row(
+                            Text("···", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_r_{row_idx}", height=1,
+                        )
+                        self._diff_row_lines.append(None)
+                    elif t == "top_load":
+                        self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                        self._gap_row_actions[row_idx] = "top_load"
+                        left.add_row(
+                            Text("···", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_l_{row_idx}", height=1,
+                        )
+                        right.add_row(
+                            Text("···", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_r_{row_idx}", height=1,
+                        )
+                        self._diff_row_lines.append(None)
+                    elif t == "bottom_load":
+                        self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                        self._gap_row_actions[row_idx] = "bottom_load"
+                        left.add_row(
+                            Text("···", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_l_{row_idx}", height=1,
+                        )
+                        right.add_row(
+                            Text("···", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_r_{row_idx}", height=1,
+                        )
+                        self._diff_row_lines.append(None)
+                    elif gap_size > _LOAD_MORE_LINES:
+                        # 大きいギャップ → 上側・下側の2行に分割
+                        above_text = f"··· ↑ {_LOAD_MORE_LINES} lines above (Enter) ···"
+                        below_text = f"··· ↓ {_LOAD_MORE_LINES} lines below (Enter) ···"
+                        self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                        self._gap_row_actions[row_idx] = "above"
+                        left.add_row(
+                            Text("↑", style=_DIFF_GAP_STYLE),
+                            self._content_cell(above_text, _DIFF_GAP_STYLE),
+                            key=f"gap_l_{row_idx}", height=1,
+                        )
+                        right.add_row(
+                            Text("↑", style=_DIFF_GAP_STYLE),
+                            self._content_cell(above_text, _DIFF_GAP_STYLE),
+                            key=f"gap_r_{row_idx}", height=1,
+                        )
+                        self._diff_row_lines.append(None)
+                        row_idx += 1
+                        self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                        self._gap_row_actions[row_idx] = "below"
+                        left.add_row(
+                            Text("↓", style=_DIFF_GAP_STYLE),
+                            self._content_cell(below_text, _DIFF_GAP_STYLE),
+                            key=f"gap_l_{row_idx}", height=1,
+                        )
+                        right.add_row(
+                            Text("↓", style=_DIFF_GAP_STYLE),
+                            self._content_cell(below_text, _DIFF_GAP_STYLE),
+                            key=f"gap_r_{row_idx}", height=1,
+                        )
+                        self._diff_row_lines.append(None)
+                    else:
+                        # 小さいギャップ → 全展開1行
+                        self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
+                        self._gap_row_actions[row_idx] = "all"
+                        left.add_row(
+                            Text("···", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_l_{row_idx}", height=1,
+                        )
+                        right.add_row(
+                            Text("···", style=_DIFF_GAP_STYLE),
+                            self._content_cell(text, _DIFF_GAP_STYLE),
+                            key=f"gap_r_{row_idx}", height=1,
+                        )
+                        self._diff_row_lines.append(None)
+                elif t in ("hunk", "header"):
+                    # @@ ハンクヘッダーとファイルヘッダーは表示しない
+                    continue
                 else:  # ctx
                     ctx_text = text[1:] if text.startswith(" ") else text
                     right_no = (
-                        f"💬{new_n}" if new_n is not None and new_n in self._comment_lines
+                        f"{new_n}💬" if new_n is not None and new_n in self._comment_lines
                         else (str(new_n) if new_n is not None else "")
                     )
                     left.add_row(
                         str(old_n) if old_n is not None else "",
-                        self._content_cell(ctx_text),
+                        self._code_cell(ctx_text),
                         key=f"ctx_l_{row_idx}",
                         height=row_height,
                     )
                     right.add_row(
                         right_no,
-                        self._content_cell(ctx_text),
+                        self._code_cell(ctx_text),
                         key=f"ctx_r_{row_idx}",
                         height=row_height,
                     )
@@ -776,15 +1254,28 @@ class ContentPanel(Widget):
     # --- ギャップ展開・コメント閲覧 ---
 
     def _expand_gap(self, row_idx: int) -> None:
-        """選択されたギャップ行のコンテキストを展開して再描画する。"""
+        """選択されたギャップ行のコンテキストを全て展開して再描画する。"""
         start, end = self._gap_row_ranges[row_idx]
         for i in range(start, end + 1):
             self._forced_ctx_indices.add(i)
         self._render_diff()
-        if self._diff_mode == DiffViewMode.UNIFIED:
-            self.query_one("#diff-table", DataTable).focus()
-        else:
-            self.query_one("#diff-table-left", DataTable).focus()
+        self._focus_diff_table()
+
+    def _expand_gap_above(self, start: int, end: int) -> None:
+        """ギャップの上側 _LOAD_MORE_LINES 行を展開して再描画する。"""
+        limit = min(start + _LOAD_MORE_LINES, end + 1)
+        for i in range(start, limit):
+            self._forced_ctx_indices.add(i)
+        self._render_diff()
+        self._focus_diff_table()
+
+    def _expand_gap_below(self, start: int, end: int) -> None:
+        """ギャップの下側 _LOAD_MORE_LINES 行を展開して再描画する。"""
+        limit = max(end - _LOAD_MORE_LINES, start - 1)
+        for i in range(end, limit, -1):
+            self._forced_ctx_indices.add(i)
+        self._render_diff()
+        self._focus_diff_table()
 
     def _show_comment_for_line(self, line_no: int) -> None:
         """指定行のコメント閲覧ダイアログを表示する。"""
@@ -830,6 +1321,120 @@ class ContentPanel(Widget):
             else:
                 self.query_one("#diff-table-left", DataTable).focus()
 
+    async def action_expand_all_lines(self) -> None:
+        """差分の全行を展開して表示する（ギャップ・上下追加行・ハンク間行をすべて読み込む）。"""
+        if self._view_state != ContentViewState.DIFF:
+            return
+        if not self._file_content:
+            await self._fetch_file_content()
+        if not self._file_content:
+            return
+
+        # ① ハンク内コンテキストギャップをすべて展開
+        for i, (t, *_) in enumerate(self._full_parsed_diff):
+            if t == "ctx":
+                self._forced_ctx_indices.add(i)
+
+        # ② 先頭の追加行をすべて表示
+        self._top_extra_count = max(self._first_diff_new_line - 1, 0)
+
+        # ③ 末尾の追加行をすべて表示
+        self._bottom_extra_count = max(len(self._file_content) - self._last_diff_new_line, 0)
+
+        # ④ ハンク間ギャップをすべて読み込む
+        last_new_no = 0
+        for t, _, new_n, text in self._full_parsed_diff:
+            if t == "hunk":
+                m = re.search(r"\+(\d+)", text)
+                if m:
+                    hunk_start = int(m.group(1))
+                    if last_new_no > 0 and hunk_start > last_new_no + 1:
+                        prev_end = last_new_no
+                        next_start = hunk_start
+                        key = (prev_end, next_start)
+                        total_gap = next_start - prev_end - 1
+                        self._inter_hunk_loaded[key] = (total_gap, 0)
+            if t in ("ctx", "add") and new_n is not None:
+                last_new_no = new_n
+
+        self._render_diff()
+        self._focus_diff_table()
+
+    async def action_select_syntax(self) -> None:
+        """シンタックスハイライト言語選択ダイアログを開く。"""
+        if self._view_state != ContentViewState.DIFF:
+            return
+        current_name: str | None = None
+        if self._syntax_lexer is not None:
+            current_name = getattr(self._syntax_lexer, "name", None)
+
+        async def _on_select(alias: str | None) -> None:
+            if alias is None:
+                # キャンセル — 何も変えない
+                self._focus_diff_table()
+                return
+            if alias == _SYNTAX_AUTO:
+                self._syntax_lexer = _get_lexer_for_path(self._current_file_path)
+            elif alias == _SYNTAX_NONE:
+                self._syntax_lexer = None
+            else:
+                from pygments.lexers import get_lexer_by_name
+                from pygments.util import ClassNotFound
+                try:
+                    self._syntax_lexer = get_lexer_by_name(alias, stripnl=True)
+                except ClassNotFound:
+                    _logger.warning("Unknown syntax alias: %s", alias)
+                    self._focus_diff_table()
+                    return
+            if self._current_diff_text:
+                self._render_diff()
+            self._focus_diff_table()
+
+        await self.app.push_screen(SyntaxSelectDialog(current_name), _on_select)
+
+    def _focused_diff_table(self) -> DataTable | None:
+        """現在フォーカスされている差分テーブルを返す。SBS では実際にフォーカスを持つ側を返す。"""
+        if self._view_state != ContentViewState.DIFF:
+            return None
+        if self._diff_mode == DiffViewMode.UNIFIED:
+            return self.query_one("#diff-table", DataTable)
+        right = self.query_one("#diff-table-right", DataTable)
+        if right.has_focus:
+            return right
+        return self.query_one("#diff-table-left", DataTable)
+
+    def action_diff_cursor_down(self) -> None:
+        """差分表示でカーソルを1行下に移動する。"""
+        table = self._focused_diff_table()
+        if table is not None:
+            table.action_cursor_down()
+
+    def action_diff_cursor_up(self) -> None:
+        """差分表示でカーソルを1行上に移動する。"""
+        table = self._focused_diff_table()
+        if table is not None:
+            table.action_cursor_up()
+
+    def action_diff_scroll_left(self) -> None:
+        """差分表示を左にスクロールする。"""
+        if self._view_state != ContentViewState.DIFF:
+            return
+        if self._diff_mode == DiffViewMode.UNIFIED:
+            self.query_one("#diff-table", DataTable).scroll_left(animate=False)
+        else:
+            self.query_one("#diff-table-left", DataTable).scroll_left(animate=False)
+            self.query_one("#diff-table-right", DataTable).scroll_left(animate=False)
+
+    def action_diff_scroll_right(self) -> None:
+        """差分表示を右にスクロールする。"""
+        if self._view_state != ContentViewState.DIFF:
+            return
+        if self._diff_mode == DiffViewMode.UNIFIED:
+            self.query_one("#diff-table", DataTable).scroll_right(animate=False)
+        else:
+            self.query_one("#diff-table-left", DataTable).scroll_right(animate=False)
+            self.query_one("#diff-table-right", DataTable).scroll_right(animate=False)
+
     async def action_add_comment(self) -> None:
         if self._view_state == ContentViewState.DIFF:
             if self._current_mr_iid is None or self._current_file_path is None:
@@ -869,6 +1474,9 @@ class ContentPanel(Widget):
         self._full_parsed_diff = []
         self._forced_ctx_indices = set()
         self._gap_row_ranges = {}
+        self._gap_row_actions = {}
+        self._inter_hunk_loaded = {}
+        self._syntax_lexer = None
         self._file_content = []
         self._top_extra_count = 0
         self._bottom_extra_count = 0

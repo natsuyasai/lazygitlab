@@ -95,7 +95,7 @@ class LazyGitLabApp(App):
         for child in list(container.children):
             await child.remove()
 
-        mr_panel = MRListPanel(self._mr_service)
+        mr_panel = MRListPanel(self._mr_service, self._comment_service)
         content_panel = ContentPanel(self._mr_service, self._comment_service)
         content_panel.set_editor_command(self._config.editor)
 

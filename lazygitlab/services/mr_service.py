@@ -21,7 +21,7 @@ from lazygitlab.services.exceptions import (
     MRNotFoundError,
 )
 from lazygitlab.services.gitlab_client import GitLabClient
-from lazygitlab.services.types import PaginatedResult
+from lazygitlab.services.types import MRCategory, PaginatedResult
 
 _CACHE_DETAIL_MAX = 100
 _CACHE_CHANGES_MAX = 100
@@ -115,6 +115,16 @@ class MRService:
             raise self._client._wrap_api_error(exc) from exc
         return self._parse_paginated(mr_list, page)
 
+    async def get_reviewer_is_me(self, page: int = 1) -> PaginatedResult:
+        """自身がレビュアーに設定されているMR一覧を取得する。"""
+        kwargs = self._build_list_kwargs(reviewer_id=self._current_user_id, page=page)
+        self._logger.debug("Fetching MRs where I am reviewer (page=%s)", page)
+        try:
+            mr_list = await asyncio.to_thread(self._project.mergerequests.list, **kwargs)
+        except Exception as exc:
+            raise self._client._wrap_api_error(exc) from exc
+        return self._parse_paginated(mr_list, page)
+
     async def get_assigned_to_others(self, page: int = 1) -> PaginatedResult:
         """自身以外に割り当てられているMR一覧を取得する。"""
         kwargs = self._build_list_kwargs(assignee_id="Any", page=page)
@@ -133,6 +143,17 @@ class MRService:
         has_next = getattr(mr_list, "_next_url", None) is not None
         next_page = page + 1 if has_next else None
         return PaginatedResult(items=items, has_next_page=has_next, next_page=next_page)
+
+    async def _get_mr_list_by_category(self, category: MRCategory, page: int = 1) -> PaginatedResult:
+        """カテゴリに応じたMR一覧取得メソッドにディスパッチする。"""
+        dispatch = {
+            MRCategory.ASSIGNED_TO_ME: self.get_assigned_to_me,
+            MRCategory.REVIEWER_IS_ME: self.get_reviewer_is_me,
+            MRCategory.CREATED_BY_ME: self.get_created_by_me,
+            MRCategory.UNASSIGNED: self.get_unassigned,
+            MRCategory.ASSIGNED_TO_OTHERS: self.get_assigned_to_others,
+        }
+        return await dispatch[category](page=page)
 
     async def get_mr_detail(self, mr_iid: int) -> MergeRequestDetail:
         """MR詳細を取得する(キャッシュ対象)。

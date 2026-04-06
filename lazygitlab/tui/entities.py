@@ -49,6 +49,7 @@ class ContentViewState(Enum):
 # カテゴリ表示ラベルマッピング
 CATEGORY_LABELS: dict[MRCategory, str] = {
     MRCategory.ASSIGNED_TO_ME: "Assigned to me",
+    MRCategory.REVIEWER_IS_ME: "Reviewer (me)",
     MRCategory.CREATED_BY_ME: "Created by me",
     MRCategory.UNASSIGNED: "Unassigned",
     MRCategory.ASSIGNED_TO_OTHERS: "Others",
