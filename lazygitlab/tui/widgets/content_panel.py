@@ -931,12 +931,48 @@ class ContentPanel(Widget):
             t = parent
         return None
 
-    def _code_cell(self, text: str, bg_style: str = "", has_diff_prefix: bool = False) -> Text:
+    def _lex_lines(self, lines: list[str]) -> list[list[tuple[Any, str]]]:
+        """複数のコード行を一括 lex し、行ごとのトークンリストを返す。
+
+        pygments が Vue SFC 等の複数行コンテキストを必要とする場合に
+        正しくハイライトできるよう、全行を連結して 1 度だけ lex する。
+        """
+        if self._syntax_lexer is None or not lines:
+            return [[] for _ in lines]
+
+        full_code = "\n".join(lines)
+        per_line: list[list[tuple[Any, str]]] = []
+        current: list[tuple[Any, str]] = []
+
+        for token_type, value in _pygments_lex(full_code, self._syntax_lexer):
+            parts = value.split("\n")
+            for i, part in enumerate(parts):
+                if i > 0:
+                    per_line.append(current)
+                    current = []
+                if part:
+                    current.append((token_type, part))
+        per_line.append(current)
+
+        # 行数を lines に合わせる（念のため）
+        while len(per_line) < len(lines):
+            per_line.append([])
+
+        return per_line[: len(lines)]
+
+    def _code_cell(
+        self,
+        text: str,
+        bg_style: str = "",
+        has_diff_prefix: bool = False,
+        precomputed_tokens: list[tuple[Any, str]] | None = None,
+    ) -> Text:
         """シンタックスハイライト付きコードセルを返す。
 
         レキサーが未設定の場合は _content_cell にフォールバックする。
         has_diff_prefix=True のとき、先頭の +/-/space をプレフィックスとして扱い
         それ以降の文字列をハイライト対象にする。
+        precomputed_tokens が指定された場合は再 lex せずそのトークンを使用する。
         """
         if self._syntax_lexer is None:
             return self._content_cell(text, bg_style)
@@ -951,7 +987,12 @@ class ContentPanel(Widget):
         if prefix_char:
             result.append(prefix_char, style=bg_style)
 
-        for token_type, value in _pygments_lex(code, self._syntax_lexer):
+        tokens: Any = (
+            precomputed_tokens
+            if precomputed_tokens is not None
+            else _pygments_lex(code, self._syntax_lexer)
+        )
+        for token_type, value in tokens:
             if not value:
                 continue
             fg = self._get_token_color(token_type)
@@ -977,6 +1018,15 @@ class ContentPanel(Widget):
         """unified diff の行リストを DataTable に描画する。"""
         row_idx = 0
         row_height = self._row_height()
+
+        # 全コード行を一括 lex（Vue SFC 等の複数行コンテキストに対応）
+        code_lines = [
+            text[1:] if text else ""
+            for t, _, _, text in rows
+            if t in ("add", "rem", "ctx")
+        ]
+        precomputed = self._lex_lines(code_lines)
+        code_row_idx = 0
 
         for t, old_n, new_n, text in rows:
             if t in ("gap", "top_load", "bottom_load", "inter_above", "inter_below", "inter_all"):
@@ -1078,33 +1128,39 @@ class ContentPanel(Widget):
                 # @@ ハンクヘッダーとファイルヘッダーは表示しない（行番号で代替可能）
                 continue
             elif t == "add":
+                tokens = precomputed[code_row_idx]
+                code_row_idx += 1
                 no_label = f"{new_n}💬" if new_n in self._comment_lines else str(new_n)
                 table.add_row(
                     Text("", style=_DIFF_ADD_STYLE),
                     Text(no_label, style=_DIFF_ADD_STYLE),
-                    self._code_cell(text, _DIFF_ADD_STYLE, has_diff_prefix=True),
+                    self._code_cell(text, _DIFF_ADD_STYLE, has_diff_prefix=True, precomputed_tokens=tokens),
                     key=f"add_{row_idx}",
                     height=row_height,
                 )
                 self._diff_row_lines.append(new_n)
             elif t == "rem":
+                tokens = precomputed[code_row_idx]
+                code_row_idx += 1
                 no_label = f"{old_n}💬" if old_n in self._comment_lines else str(old_n)
                 table.add_row(
                     Text(no_label, style=_DIFF_REM_STYLE),
                     Text("", style=_DIFF_REM_STYLE),
-                    self._code_cell(text, _DIFF_REM_STYLE, has_diff_prefix=True),
+                    self._code_cell(text, _DIFF_REM_STYLE, has_diff_prefix=True, precomputed_tokens=tokens),
                     key=f"rem_{row_idx}",
                     height=row_height,
                 )
                 self._diff_row_lines.append(None)
             else:  # ctx
+                tokens = precomputed[code_row_idx]
+                code_row_idx += 1
                 no_label = f"{new_n}💬" if new_n in self._comment_lines else (
                     str(new_n) if new_n is not None else ""
                 )
                 table.add_row(
                     str(old_n) if old_n is not None else "",
                     no_label,
-                    self._code_cell(text, has_diff_prefix=True),
+                    self._code_cell(text, has_diff_prefix=True, precomputed_tokens=tokens),
                     key=f"ctx_{row_idx}",
                     height=row_height,
                 )
@@ -1121,8 +1177,19 @@ class ContentPanel(Widget):
         row_idx = 0
         row_height = self._row_height()
 
-        pending_rem: list[tuple[int | None, str]] = []
-        pending_add: list[tuple[int | None, str]] = []
+        # 全コード行を一括 lex（Vue SFC 等の複数行コンテキストに対応）
+        code_lines = [
+            (text[1:] if text.startswith("-") else text) if t == "rem"
+            else (text[1:] if text.startswith("+") else text) if t == "add"
+            else (text[1:] if text.startswith(" ") else text)
+            for t, _, _, text in rows
+            if t in ("rem", "add", "ctx")
+        ]
+        precomputed = self._lex_lines(code_lines)
+        code_row_idx = 0
+
+        pending_rem: list[tuple[int | None, str, list[tuple[Any, str]]]] = []
+        pending_add: list[tuple[int | None, str, list[tuple[Any, str]]]] = []
 
         def _flush() -> None:
             nonlocal row_idx
@@ -1130,8 +1197,8 @@ class ContentPanel(Widget):
                 return
             max_len = max(len(pending_rem), len(pending_add))
             for k in range(max_len):
-                old_n2, old_t = pending_rem[k] if k < len(pending_rem) else (None, "")
-                new_n2, new_t = pending_add[k] if k < len(pending_add) else (None, "")
+                old_n2, old_t, old_tok = pending_rem[k] if k < len(pending_rem) else (None, "", [])
+                new_n2, new_t, new_tok = pending_add[k] if k < len(pending_add) else (None, "", [])
                 left_no = (
                     f"{old_n2}💬" if old_n2 and old_n2 in self._comment_lines
                     else (str(old_n2) if old_n2 else "")
@@ -1142,13 +1209,13 @@ class ContentPanel(Widget):
                 )
                 left.add_row(
                     Text(left_no, style=_DIFF_REM_STYLE if old_t else ""),
-                    self._code_cell(old_t, _DIFF_REM_STYLE if old_t else ""),
+                    self._code_cell(old_t, _DIFF_REM_STYLE if old_t else "", precomputed_tokens=old_tok if old_t else None),
                     key=f"sbs_l_{row_idx}",
                     height=row_height,
                 )
                 right.add_row(
                     Text(right_no, style=_DIFF_ADD_STYLE if new_t else ""),
-                    self._code_cell(new_t, _DIFF_ADD_STYLE if new_t else ""),
+                    self._code_cell(new_t, _DIFF_ADD_STYLE if new_t else "", precomputed_tokens=new_tok if new_t else None),
                     key=f"sbs_r_{row_idx}",
                     height=row_height,
                 )
@@ -1159,9 +1226,13 @@ class ContentPanel(Widget):
 
         for t, old_n, new_n, text in rows:
             if t == "rem":
-                pending_rem.append((old_n, text[1:] if text.startswith("-") else text))
+                stripped = text[1:] if text.startswith("-") else text
+                pending_rem.append((old_n, stripped, precomputed[code_row_idx]))
+                code_row_idx += 1
             elif t == "add":
-                pending_add.append((new_n, text[1:] if text.startswith("+") else text))
+                stripped = text[1:] if text.startswith("+") else text
+                pending_add.append((new_n, stripped, precomputed[code_row_idx]))
+                code_row_idx += 1
             else:
                 _flush()
                 if t in ("gap", "top_load", "bottom_load", "inter_above", "inter_below", "inter_all"):
@@ -1291,19 +1362,21 @@ class ContentPanel(Widget):
                     continue
                 else:  # ctx
                     ctx_text = text[1:] if text.startswith(" ") else text
+                    ctx_tokens = precomputed[code_row_idx]
+                    code_row_idx += 1
                     right_no = (
                         f"{new_n}💬" if new_n is not None and new_n in self._comment_lines
                         else (str(new_n) if new_n is not None else "")
                     )
                     left.add_row(
                         str(old_n) if old_n is not None else "",
-                        self._code_cell(ctx_text),
+                        self._code_cell(ctx_text, precomputed_tokens=ctx_tokens),
                         key=f"ctx_l_{row_idx}",
                         height=row_height,
                     )
                     right.add_row(
                         right_no,
-                        self._code_cell(ctx_text),
+                        self._code_cell(ctx_text, precomputed_tokens=ctx_tokens),
                         key=f"ctx_r_{row_idx}",
                         height=row_height,
                     )
