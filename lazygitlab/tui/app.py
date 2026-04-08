@@ -9,7 +9,7 @@ from typing import ClassVar
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.widgets import Footer, Header
+from textual.widgets import Footer, Header, Tree
 
 from lazygitlab.infrastructure.git_detector import GitRepoDetector
 from lazygitlab.infrastructure.logger import get_logger
@@ -37,6 +37,7 @@ class LazyGitLabApp(App):
         Binding("q", "quit", "Quit"),
         Binding("question_mark", "show_help", "Help"),
         Binding("r", "refresh", "Refresh"),
+        Binding("m", "focus_mr_list", "Focus MR"),
         Binding("e", "open_in_editor", "Editor", priority=True),
         Binding("left_square_bracket", "toggle_sidebar", "Toggle Sidebar"),
     ]
@@ -177,6 +178,14 @@ class LazyGitLabApp(App):
                 mr_panel.remove_class("-hidden")
             else:
                 mr_panel.add_class("-hidden")
+        except Exception:  # noqa: S110
+            pass
+
+    def action_focus_mr_list(self) -> None:
+        try:
+            mr_panel = self.query_one(MRListPanel)
+            tree = mr_panel.query_one(Tree)
+            tree.focus()
         except Exception:  # noqa: S110
             pass
 
