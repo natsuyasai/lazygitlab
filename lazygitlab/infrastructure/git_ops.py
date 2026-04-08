@@ -82,7 +82,7 @@ def checkout_or_switch_branch(
 
     if not branch_exists_locally:
         # ローカルに存在しない → チェックアウトして upstream を設定
-        _run_git(["checkout", "-b", branch, f"--track={remote_ref}"], cwd=cwd)
+        _run_git(["checkout", "-b", branch, "--track", remote_ref], cwd=cwd)
         return CheckoutResult(
             branch=branch,
             action="checkout",
