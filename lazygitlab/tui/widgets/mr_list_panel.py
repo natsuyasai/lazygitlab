@@ -89,14 +89,22 @@ class MRListPanel(Widget):
             MRCategory.ASSIGNED_TO_OTHERS,
         ]
 
-        for category, result in zip(categories, results, strict=False):
+        expands = [
+            False,
+            True,
+            False,
+            False,
+            False
+        ]
+
+        for category, result, expand in zip(categories, results, expands, strict=False):
             if isinstance(result, Exception):
                 _logger.error("Failed to load %s: %s", category, result)
                 label = f"{CATEGORY_LABELS[category]} (error)"
                 node = tree.root.add(
                     label,
                     data=TreeNodeData(node_type=TreeNodeType.CATEGORY, category=category),
-                    expand=False,
+                    expand=expand,
                 )
                 self._category_nodes[category] = node
                 continue
@@ -107,7 +115,7 @@ class MRListPanel(Widget):
             cat_node = tree.root.add(
                 label,
                 data=TreeNodeData(node_type=TreeNodeType.CATEGORY, category=category),
-                expand=True,
+                expand=expand,
             )
             self._category_nodes[category] = cat_node
 
