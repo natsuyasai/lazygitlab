@@ -277,6 +277,14 @@ class MRListPanel(Widget):
         if data.node_type == TreeNodeType.LOAD_MORE:
             self.run_worker(self._load_more(node), exclusive=False)
 
+    def get_selected_mr_iid(self) -> int | None:
+        """現在カーソルがあるノードの MR IID を返す。取得できない場合は None。"""
+        tree = self.query_one(Tree)
+        node = tree.cursor_node
+        if node is None or node.data is None:
+            return None
+        return node.data.mr_iid
+
     def action_cursor_down(self) -> None:
         self.query_one(Tree).action_cursor_down()
 

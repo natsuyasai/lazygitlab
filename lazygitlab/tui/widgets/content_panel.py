@@ -1134,7 +1134,9 @@ class ContentPanel(Widget):
                 table.add_row(
                     Text("", style=_DIFF_ADD_STYLE),
                     Text(no_label, style=_DIFF_ADD_STYLE),
-                    self._code_cell(text, _DIFF_ADD_STYLE, has_diff_prefix=True, precomputed_tokens=tokens),
+                    self._code_cell(
+                        text, _DIFF_ADD_STYLE, has_diff_prefix=True, precomputed_tokens=tokens
+                    ),
                     key=f"add_{row_idx}",
                     height=row_height,
                 )
@@ -1146,7 +1148,9 @@ class ContentPanel(Widget):
                 table.add_row(
                     Text(no_label, style=_DIFF_REM_STYLE),
                     Text("", style=_DIFF_REM_STYLE),
-                    self._code_cell(text, _DIFF_REM_STYLE, has_diff_prefix=True, precomputed_tokens=tokens),
+                    self._code_cell(
+                        text, _DIFF_REM_STYLE, has_diff_prefix=True, precomputed_tokens=tokens
+                    ),
                     key=f"rem_{row_idx}",
                     height=row_height,
                 )
@@ -1209,13 +1213,21 @@ class ContentPanel(Widget):
                 )
                 left.add_row(
                     Text(left_no, style=_DIFF_REM_STYLE if old_t else ""),
-                    self._code_cell(old_t, _DIFF_REM_STYLE if old_t else "", precomputed_tokens=old_tok if old_t else None),
+                    self._code_cell(
+                        old_t,
+                        _DIFF_REM_STYLE if old_t else "",
+                        precomputed_tokens=old_tok if old_t else None,
+                    ),
                     key=f"sbs_l_{row_idx}",
                     height=row_height,
                 )
                 right.add_row(
                     Text(right_no, style=_DIFF_ADD_STYLE if new_t else ""),
-                    self._code_cell(new_t, _DIFF_ADD_STYLE if new_t else "", precomputed_tokens=new_tok if new_t else None),
+                    self._code_cell(
+                        new_t,
+                        _DIFF_ADD_STYLE if new_t else "",
+                        precomputed_tokens=new_tok if new_t else None,
+                    ),
                     key=f"sbs_r_{row_idx}",
                     height=row_height,
                 )
@@ -1235,7 +1247,8 @@ class ContentPanel(Widget):
                 code_row_idx += 1
             else:
                 _flush()
-                if t in ("gap", "top_load", "bottom_load", "inter_above", "inter_below", "inter_all"):
+                if t in ("gap", "top_load", "bottom_load",
+                         "inter_above", "inter_below", "inter_all"):
                     gap_size = (
                         (new_n - old_n + 1)
                         if (t == "gap" and old_n is not None and new_n is not None)

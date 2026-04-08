@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
 from pathlib import Path
 from typing import ClassVar
@@ -11,9 +12,9 @@ from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widgets import Footer, Header, Tree
 
+from lazygitlab.infrastructure.config import ConfigManager
 from lazygitlab.infrastructure.git_detector import GitRepoDetector
 from lazygitlab.infrastructure.logger import get_logger
-from lazygitlab.infrastructure.config import ConfigManager
 from lazygitlab.models import AppConfig
 from lazygitlab.services import CommentService, GitLabClient, MRService
 from lazygitlab.services.exceptions import LazyGitLabAPIError
@@ -40,6 +41,7 @@ class LazyGitLabApp(App):
         Binding("m", "focus_mr_list", "Focus MR"),
         Binding("e", "open_in_editor", "Editor", priority=True),
         Binding("left_square_bracket", "toggle_sidebar", "Toggle Sidebar"),
+        Binding("b", "checkout_branch", "Checkout Branch"),
     ]
 
     def __init__(
@@ -217,6 +219,51 @@ class LazyGitLabApp(App):
             content_panel.on_comment_posted(message)
         except Exception:  # noqa: S110
             pass
+
+    async def action_checkout_branch(self) -> None:
+        """選択中の MR のソースブランチをチェックアウトまたはスイッチする。"""
+        if self._mr_service is None:
+            return
+        try:
+            mr_panel = self.query_one(MRListPanel)
+        except Exception:
+            return
+        mr_iid = mr_panel.get_selected_mr_iid()
+        if mr_iid is None:
+            return
+        self.run_worker(self._checkout_branch_worker(mr_iid), exclusive=False)
+
+    async def _checkout_branch_worker(self, mr_iid: int) -> None:
+        """ブランチのチェックアウト処理を非同期ワーカーとして実行する。"""
+        from lazygitlab.infrastructure.git_ops import GitOpsError, checkout_or_switch_branch
+
+        self.sub_title = f"MR !{mr_iid} の情報を取得中..."
+        try:
+            assert self._mr_service is not None
+            detail = await self._mr_service.get_mr_detail(mr_iid)
+        except Exception as exc:
+            self.sub_title = ""
+            await self.push_screen(ErrorDialog(f"MR 情報の取得に失敗しました: {exc}"))
+            return
+
+        source_branch = detail.source_branch
+        if not source_branch:
+            self.sub_title = ""
+            await self.push_screen(ErrorDialog("ソースブランチ情報が取得できませんでした。"))
+            return
+
+        remote = self._config.remote_name or "origin"
+        self.sub_title = f"'{source_branch}' をチェックアウト中..."
+        try:
+            result = await asyncio.to_thread(checkout_or_switch_branch, source_branch, remote)
+            self.notify(result.message)
+        except GitOpsError as exc:
+            await self.push_screen(ErrorDialog(str(exc)))
+        except Exception as exc:
+            _logger.exception("Unexpected error during git checkout")
+            await self.push_screen(ErrorDialog(f"予期しないエラー: {exc}"))
+        finally:
+            self.sub_title = ""
 
     def action_quit(self) -> None:
         self.exit()
