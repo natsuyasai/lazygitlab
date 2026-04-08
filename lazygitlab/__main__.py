@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from lazygitlab.infrastructure.logger import get_logger, setup_logging
 
@@ -19,6 +20,14 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Merge request IID to open directly on startup",
+    )
+    parser.add_argument(
+        "-C",
+        "--directory",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="Run as if started in DIR instead of the current working directory",
     )
     return parser.parse_args()
 
@@ -36,9 +45,19 @@ def main() -> None:
         logger = get_logger(__name__)
         logger.info("lazygitlab starting")
 
+        cwd: Path | None = None
+        if args.directory is not None:
+            cwd = args.directory.resolve()
+            if not cwd.is_dir():
+                print(f"Error: '{cwd}' is not a directory", file=sys.stderr)
+                sys.exit(1)
+            logger.info("Working directory: %s", cwd)
+
         from lazygitlab.tui.app import LazyGitLabApp
 
-        app = LazyGitLabApp(config=config, config_manager=config_manager, initial_mr_id=args.mr_id)
+        app = LazyGitLabApp(
+            config=config, config_manager=config_manager, initial_mr_id=args.mr_id, cwd=cwd
+        )
         app.run()
 
     except KeyboardInterrupt:

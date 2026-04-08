@@ -49,11 +49,13 @@ class LazyGitLabApp(App):
         config: AppConfig,
         config_manager: ConfigManager | None = None,
         initial_mr_id: int | None = None,
+        cwd: Path | None = None,
     ) -> None:
         super().__init__()
         self._config = config
         self._config_manager = config_manager
         self._initial_mr_id = initial_mr_id
+        self._cwd = cwd
         self._sidebar_visible = True
         self._client: GitLabClient | None = None
         self._mr_service: MRService | None = None
@@ -73,7 +75,7 @@ class LazyGitLabApp(App):
         self.sub_title = "Connecting..."
 
         try:
-            detector = GitRepoDetector()
+            detector = GitRepoDetector(cwd=self._cwd)
             project_info = detector.detect(self._config)
             project_path = project_info.project_path
 
@@ -255,7 +257,9 @@ class LazyGitLabApp(App):
         remote = self._config.remote_name or "origin"
         self.sub_title = f"'{source_branch}' をチェックアウト中..."
         try:
-            result = await asyncio.to_thread(checkout_or_switch_branch, source_branch, remote)
+            result = await asyncio.to_thread(
+                checkout_or_switch_branch, source_branch, remote, self._cwd
+            )
             self.notify(result.message)
         except GitOpsError as exc:
             await self.push_screen(ErrorDialog(str(exc)))
