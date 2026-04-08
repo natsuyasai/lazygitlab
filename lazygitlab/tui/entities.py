@@ -61,9 +61,13 @@ def get_file_change_label(
 ) -> str:
     """FileChange の表示ラベルを生成する。"""
     if new_file:
-        return f"+ {new_path}"
+        filename = new_path.split("/")[-1]
+        return f"+ {filename} {new_path}"
     if deleted_file:
-        return f"- {old_path}"
+        filename = old_path.split("/")[-1]
+        return f"- {filename} {old_path}"
     if renamed_file:
-        return f"→ {old_path} → {new_path}"
-    return f"  {new_path}"
+        filename = new_path.split("/")[-1]
+        return f"r {filename} {old_path} → {new_path}"
+    filename = new_path.split("/")[-1]
+    return f"{filename} {new_path}"
