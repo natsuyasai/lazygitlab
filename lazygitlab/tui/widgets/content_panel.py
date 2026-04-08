@@ -149,12 +149,12 @@ def _format_diff_line(line: str) -> str:
     return line.replace("[", r"\[")
 
 
-def _get_comment_lines(discussions: list[Discussion]) -> set[int]:
+def _get_comment_lines(discussions: list[Discussion], file_path: str) -> set[int]:
     """インラインコメントが付いている行番号の集合を返す。"""
     lines: set[int] = set()
     for disc in discussions:
         for note in disc.notes:
-            if note.position is not None:
+            if note.position is not None and note.position.file_path == file_path:
                 if note.position.new_line is not None:
                     lines.add(note.position.new_line)
                 elif note.position.old_line is not None:
@@ -162,12 +162,12 @@ def _get_comment_lines(discussions: list[Discussion]) -> set[int]:
     return lines
 
 
-def _build_comment_map(discussions: list[Discussion]) -> dict[int, list[Discussion]]:
+def _build_comment_map(discussions: list[Discussion], file_path: str) -> dict[int, list[Discussion]]:
     """行番号 → ディスカッションリストのマップを構築する。"""
     result: dict[int, list[Discussion]] = {}
     for disc in discussions:
         for note in disc.notes:
-            if note.position is not None:
+            if note.position is not None and note.position.file_path == file_path:
                 line_no = note.position.new_line or note.position.old_line
                 if line_no is not None:
                     if line_no not in result:
@@ -591,9 +591,9 @@ class ContentPanel(Widget):
                 self._mr_service.get_mr_diff(mr_iid, file_path),
                 self._comment_service.get_discussions(mr_iid),
             )
-            self._comment_lines = _get_comment_lines(discussions)
+            self._comment_lines = _get_comment_lines(discussions, file_path)
             self._discussions = discussions
-            self._comment_map = _build_comment_map(discussions)
+            self._comment_map = _build_comment_map(discussions, file_path)
             self._current_diff_text = file_diff.diff
             self._full_parsed_diff = _parse_diff(file_diff.diff)
             self._first_diff_new_line, self._last_diff_new_line = _find_first_last_new_line(
