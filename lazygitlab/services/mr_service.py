@@ -144,7 +144,9 @@ class MRService:
         next_page = page + 1 if has_next else None
         return PaginatedResult(items=items, has_next_page=has_next, next_page=next_page)
 
-    async def _get_mr_list_by_category(self, category: MRCategory, page: int = 1) -> PaginatedResult:
+    async def _get_mr_list_by_category(
+        self, category: MRCategory, page: int = 1
+    ) -> PaginatedResult:
         """カテゴリに応じたMR一覧取得メソッドにディスパッチする。"""
         dispatch = {
             MRCategory.ASSIGNED_TO_ME: self.get_assigned_to_me,
@@ -255,9 +257,7 @@ class MRService:
         """
         detail = await self.get_mr_detail(mr_iid)
         ref = detail.source_branch or "HEAD"
-        self._logger.debug(
-            "Fetching file content: iid=%s file=%s ref=%s", mr_iid, file_path, ref
-        )
+        self._logger.debug("Fetching file content: iid=%s file=%s ref=%s", mr_iid, file_path, ref)
         try:
             f = await asyncio.to_thread(self._project.files.get, file_path, ref=ref)
             content = f.decode().decode("utf-8", errors="replace")

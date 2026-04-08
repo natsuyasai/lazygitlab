@@ -51,9 +51,7 @@ def _run_git(args: list[str], cwd: Path | None = None) -> str:
     return result.stdout
 
 
-def checkout_or_switch_branch(
-    branch: str, remote: str, cwd: Path | None = None
-) -> CheckoutResult:
+def checkout_or_switch_branch(branch: str, remote: str, cwd: Path | None = None) -> CheckoutResult:
     """マージリクエストのソースブランチをチェックアウトまたはスイッチする。
 
     - ローカルに存在しない場合: ``git checkout -b <branch> --track <remote>/<branch>``

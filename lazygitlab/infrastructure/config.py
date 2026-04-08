@@ -211,18 +211,18 @@ class ConfigManager:
                 if next_section_pattern.match(line) and not section_pattern.match(line):
                     # セクションが終わった — キーがまだ書かれていなければここに挿入
                     if not key_written:
-                        new_lines.append(f'{key} = {toml_value}\n')
+                        new_lines.append(f"{key} = {toml_value}\n")
                         key_written = True
                     in_section = False
                 elif key_pattern.match(line):
-                    new_lines.append(f'{key} = {toml_value}\n')
+                    new_lines.append(f"{key} = {toml_value}\n")
                     key_written = True
                     continue
             new_lines.append(line)
 
         # セクションが最後まで続いていてキーが未書き込みの場合は末尾に追加
         if not key_written:
-            new_lines.append(f'{key} = {toml_value}\n')
+            new_lines.append(f"{key} = {toml_value}\n")
 
         self._write_config("".join(new_lines))
 

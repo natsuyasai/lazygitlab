@@ -89,13 +89,7 @@ class MRListPanel(Widget):
             MRCategory.ASSIGNED_TO_OTHERS,
         ]
 
-        expands = [
-            False,
-            True,
-            False,
-            False,
-            False
-        ]
+        expands = [False, True, False, False, False]
 
         for category, result, expand in zip(categories, results, expands, strict=False):
             if isinstance(result, Exception):

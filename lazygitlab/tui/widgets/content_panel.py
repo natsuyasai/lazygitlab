@@ -28,11 +28,17 @@ from lazygitlab.tui.screens.comment_view_dialog import CommentViewDialog
 from lazygitlab.tui.screens.error_dialog import ErrorDialog
 from lazygitlab.tui.screens.style_select_dialog import (
     DEFAULT_OPTION_ID as _STYLE_DEFAULT,
+)
+from lazygitlab.tui.screens.style_select_dialog import (
     StyleSelectDialog,
 )
 from lazygitlab.tui.screens.syntax_select_dialog import (
     AUTO_OPTION_ID as _SYNTAX_AUTO,
+)
+from lazygitlab.tui.screens.syntax_select_dialog import (
     NONE_OPTION_ID as _SYNTAX_NONE,
+)
+from lazygitlab.tui.screens.syntax_select_dialog import (
     SyntaxSelectDialog,
 )
 
@@ -162,7 +168,9 @@ def _get_comment_lines(discussions: list[Discussion], file_path: str) -> set[int
     return lines
 
 
-def _build_comment_map(discussions: list[Discussion], file_path: str) -> dict[int, list[Discussion]]:
+def _build_comment_map(
+    discussions: list[Discussion], file_path: str
+) -> dict[int, list[Discussion]]:
     """行番号 → ディスカッションリストのマップを構築する。"""
     result: dict[int, list[Discussion]] = {}
     for disc in discussions:
@@ -749,36 +757,56 @@ class ContentPanel(Widget):
                         for i in range(above_count):
                             line_no = prev_end + 1 + i
                             if 1 <= line_no <= len(self._file_content):
-                                result.append((
-                                    "ctx", line_no, line_no,
-                                    " " + self._file_content[line_no - 1],
-                                ))
+                                result.append(
+                                    (
+                                        "ctx",
+                                        line_no,
+                                        line_no,
+                                        " " + self._file_content[line_no - 1],
+                                    )
+                                )
 
                         # 省略行の読み込みエントリを挿入
                         if remaining > 0:
                             if remaining > _LOAD_MORE_LINES:
-                                result.append((
-                                    "inter_above", prev_end, next_start,
-                                    f"··· ↑ {_LOAD_MORE_LINES} lines above (Enter) ···",
-                                ))
-                                result.append((
-                                    "inter_below", prev_end, next_start,
-                                    f"··· ↓ {_LOAD_MORE_LINES} lines below (Enter) ···",
-                                ))
+                                result.append(
+                                    (
+                                        "inter_above",
+                                        prev_end,
+                                        next_start,
+                                        f"··· ↑ {_LOAD_MORE_LINES} lines above (Enter) ···",
+                                    )
+                                )
+                                result.append(
+                                    (
+                                        "inter_below",
+                                        prev_end,
+                                        next_start,
+                                        f"··· ↓ {_LOAD_MORE_LINES} lines below (Enter) ···",
+                                    )
+                                )
                             else:
-                                result.append((
-                                    "inter_all", prev_end, next_start,
-                                    f"··· {remaining} lines hidden (Enter to expand) ···",
-                                ))
+                                result.append(
+                                    (
+                                        "inter_all",
+                                        prev_end,
+                                        next_start,
+                                        f"··· {remaining} lines hidden (Enter to expand) ···",
+                                    )
+                                )
 
                         # 下側読み込み済み行を挿入（next_start に近い順）
                         for i in range(below_count - 1, -1, -1):
                             line_no = next_start - 1 - i
                             if 1 <= line_no <= len(self._file_content):
-                                result.append((
-                                    "ctx", line_no, line_no,
-                                    " " + self._file_content[line_no - 1],
-                                ))
+                                result.append(
+                                    (
+                                        "ctx",
+                                        line_no,
+                                        line_no,
+                                        " " + self._file_content[line_no - 1],
+                                    )
+                                )
 
             # ctx/add 行のみ新ファイル行番号を更新する（gap などの擬似行番号は除外）
             if t in ("ctx", "add") and new_n is not None:
@@ -804,21 +832,25 @@ class ContentPanel(Widget):
             if self._file_content and self._top_extra_count > 0:
                 top_start_idx = max(0, top_end_idx - self._top_extra_count)
                 if top_start_idx > 0:
-                    result.append((
+                    result.append(
+                        (
+                            "top_load",
+                            _TOP_LOAD_SENTINEL[0],
+                            _TOP_LOAD_SENTINEL[1],
+                            f"··· load {_LOAD_MORE_LINES} more lines above (Enter) ···",
+                        )
+                    )
+                for i in range(top_start_idx, top_end_idx):
+                    result.append(("ctx", i + 1, i + 1, " " + self._file_content[i]))
+            else:
+                result.append(
+                    (
                         "top_load",
                         _TOP_LOAD_SENTINEL[0],
                         _TOP_LOAD_SENTINEL[1],
                         f"··· load {_LOAD_MORE_LINES} more lines above (Enter) ···",
-                    ))
-                for i in range(top_start_idx, top_end_idx):
-                    result.append(("ctx", i + 1, i + 1, " " + self._file_content[i]))
-            else:
-                result.append((
-                    "top_load",
-                    _TOP_LOAD_SENTINEL[0],
-                    _TOP_LOAD_SENTINEL[1],
-                    f"··· load {_LOAD_MORE_LINES} more lines above (Enter) ···",
-                ))
+                    )
+                )
 
         # --- 通常の diff 行（context フィルタ済み + ハンク間ギャップ挿入） ---
         filtered = _apply_context_filter(
@@ -840,12 +872,14 @@ class ContentPanel(Widget):
                 has_more = True  # ファイル未取得 → まだあると仮定
 
             if has_more:
-                result.append((
-                    "bottom_load",
-                    _BOTTOM_LOAD_SENTINEL[0],
-                    _BOTTOM_LOAD_SENTINEL[1],
-                    f"··· load {_LOAD_MORE_LINES} more lines below (Enter) ···",
-                ))
+                result.append(
+                    (
+                        "bottom_load",
+                        _BOTTOM_LOAD_SENTINEL[0],
+                        _BOTTOM_LOAD_SENTINEL[1],
+                        f"··· load {_LOAD_MORE_LINES} more lines below (Enter) ···",
+                    )
+                )
 
         return result
 
@@ -1021,9 +1055,7 @@ class ContentPanel(Widget):
 
         # 全コード行を一括 lex（Vue SFC 等の複数行コンテキストに対応）
         code_lines = [
-            text[1:] if text else ""
-            for t, _, _, text in rows
-            if t in ("add", "rem", "ctx")
+            text[1:] if text else "" for t, _, _, text in rows if t in ("add", "rem", "ctx")
         ]
         precomputed = self._lex_lines(code_lines)
         code_row_idx = 0
@@ -1042,7 +1074,8 @@ class ContentPanel(Widget):
                         Text("↑", style=_DIFF_GAP_STYLE),
                         Text("↑", style=_DIFF_GAP_STYLE),
                         self._content_cell(text, _DIFF_GAP_STYLE),
-                        key=f"gap_{row_idx}", height=1,
+                        key=f"gap_{row_idx}",
+                        height=1,
                     )
                     self._diff_row_lines.append(None)
                 elif t == "inter_below":
@@ -1052,7 +1085,8 @@ class ContentPanel(Widget):
                         Text("↓", style=_DIFF_GAP_STYLE),
                         Text("↓", style=_DIFF_GAP_STYLE),
                         self._content_cell(text, _DIFF_GAP_STYLE),
-                        key=f"gap_{row_idx}", height=1,
+                        key=f"gap_{row_idx}",
+                        height=1,
                     )
                     self._diff_row_lines.append(None)
                 elif t == "inter_all":
@@ -1062,7 +1096,8 @@ class ContentPanel(Widget):
                         Text("···", style=_DIFF_GAP_STYLE),
                         Text("···", style=_DIFF_GAP_STYLE),
                         self._content_cell(text, _DIFF_GAP_STYLE),
-                        key=f"gap_{row_idx}", height=1,
+                        key=f"gap_{row_idx}",
+                        height=1,
                     )
                     self._diff_row_lines.append(None)
                 elif t == "top_load":
@@ -1158,8 +1193,10 @@ class ContentPanel(Widget):
             else:  # ctx
                 tokens = precomputed[code_row_idx]
                 code_row_idx += 1
-                no_label = f"{new_n}💬" if new_n in self._comment_lines else (
-                    str(new_n) if new_n is not None else ""
+                no_label = (
+                    f"{new_n}💬"
+                    if new_n in self._comment_lines
+                    else (str(new_n) if new_n is not None else "")
                 )
                 table.add_row(
                     str(old_n) if old_n is not None else "",
@@ -1183,8 +1220,10 @@ class ContentPanel(Widget):
 
         # 全コード行を一括 lex（Vue SFC 等の複数行コンテキストに対応）
         code_lines = [
-            (text[1:] if text.startswith("-") else text) if t == "rem"
-            else (text[1:] if text.startswith("+") else text) if t == "add"
+            (text[1:] if text.startswith("-") else text)
+            if t == "rem"
+            else (text[1:] if text.startswith("+") else text)
+            if t == "add"
             else (text[1:] if text.startswith(" ") else text)
             for t, _, _, text in rows
             if t in ("rem", "add", "ctx")
@@ -1204,11 +1243,13 @@ class ContentPanel(Widget):
                 old_n2, old_t, old_tok = pending_rem[k] if k < len(pending_rem) else (None, "", [])
                 new_n2, new_t, new_tok = pending_add[k] if k < len(pending_add) else (None, "", [])
                 left_no = (
-                    f"{old_n2}💬" if old_n2 and old_n2 in self._comment_lines
+                    f"{old_n2}💬"
+                    if old_n2 and old_n2 in self._comment_lines
                     else (str(old_n2) if old_n2 else "")
                 )
                 right_no = (
-                    f"{new_n2}💬" if new_n2 and new_n2 in self._comment_lines
+                    f"{new_n2}💬"
+                    if new_n2 and new_n2 in self._comment_lines
                     else (str(new_n2) if new_n2 else "")
                 )
                 left.add_row(
@@ -1247,8 +1288,14 @@ class ContentPanel(Widget):
                 code_row_idx += 1
             else:
                 _flush()
-                if t in ("gap", "top_load", "bottom_load",
-                         "inter_above", "inter_below", "inter_all"):
+                if t in (
+                    "gap",
+                    "top_load",
+                    "bottom_load",
+                    "inter_above",
+                    "inter_below",
+                    "inter_all",
+                ):
                     gap_size = (
                         (new_n - old_n + 1)
                         if (t == "gap" and old_n is not None and new_n is not None)
@@ -1260,12 +1307,14 @@ class ContentPanel(Widget):
                         left.add_row(
                             Text("↑", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_l_{row_idx}", height=1,
+                            key=f"gap_l_{row_idx}",
+                            height=1,
                         )
                         right.add_row(
                             Text("↑", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_r_{row_idx}", height=1,
+                            key=f"gap_r_{row_idx}",
+                            height=1,
                         )
                         self._diff_row_lines.append(None)
                     elif t == "inter_below":
@@ -1274,12 +1323,14 @@ class ContentPanel(Widget):
                         left.add_row(
                             Text("↓", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_l_{row_idx}", height=1,
+                            key=f"gap_l_{row_idx}",
+                            height=1,
                         )
                         right.add_row(
                             Text("↓", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_r_{row_idx}", height=1,
+                            key=f"gap_r_{row_idx}",
+                            height=1,
                         )
                         self._diff_row_lines.append(None)
                     elif t == "inter_all":
@@ -1288,12 +1339,14 @@ class ContentPanel(Widget):
                         left.add_row(
                             Text("···", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_l_{row_idx}", height=1,
+                            key=f"gap_l_{row_idx}",
+                            height=1,
                         )
                         right.add_row(
                             Text("···", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_r_{row_idx}", height=1,
+                            key=f"gap_r_{row_idx}",
+                            height=1,
                         )
                         self._diff_row_lines.append(None)
                     elif t == "top_load":
@@ -1302,12 +1355,14 @@ class ContentPanel(Widget):
                         left.add_row(
                             Text("···", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_l_{row_idx}", height=1,
+                            key=f"gap_l_{row_idx}",
+                            height=1,
                         )
                         right.add_row(
                             Text("···", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_r_{row_idx}", height=1,
+                            key=f"gap_r_{row_idx}",
+                            height=1,
                         )
                         self._diff_row_lines.append(None)
                     elif t == "bottom_load":
@@ -1316,12 +1371,14 @@ class ContentPanel(Widget):
                         left.add_row(
                             Text("···", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_l_{row_idx}", height=1,
+                            key=f"gap_l_{row_idx}",
+                            height=1,
                         )
                         right.add_row(
                             Text("···", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_r_{row_idx}", height=1,
+                            key=f"gap_r_{row_idx}",
+                            height=1,
                         )
                         self._diff_row_lines.append(None)
                     elif gap_size > _LOAD_MORE_LINES:
@@ -1333,12 +1390,14 @@ class ContentPanel(Widget):
                         left.add_row(
                             Text("↑", style=_DIFF_GAP_STYLE),
                             self._content_cell(above_text, _DIFF_GAP_STYLE),
-                            key=f"gap_l_{row_idx}", height=1,
+                            key=f"gap_l_{row_idx}",
+                            height=1,
                         )
                         right.add_row(
                             Text("↑", style=_DIFF_GAP_STYLE),
                             self._content_cell(above_text, _DIFF_GAP_STYLE),
-                            key=f"gap_r_{row_idx}", height=1,
+                            key=f"gap_r_{row_idx}",
+                            height=1,
                         )
                         self._diff_row_lines.append(None)
                         row_idx += 1
@@ -1347,12 +1406,14 @@ class ContentPanel(Widget):
                         left.add_row(
                             Text("↓", style=_DIFF_GAP_STYLE),
                             self._content_cell(below_text, _DIFF_GAP_STYLE),
-                            key=f"gap_l_{row_idx}", height=1,
+                            key=f"gap_l_{row_idx}",
+                            height=1,
                         )
                         right.add_row(
                             Text("↓", style=_DIFF_GAP_STYLE),
                             self._content_cell(below_text, _DIFF_GAP_STYLE),
-                            key=f"gap_r_{row_idx}", height=1,
+                            key=f"gap_r_{row_idx}",
+                            height=1,
                         )
                         self._diff_row_lines.append(None)
                     else:
@@ -1362,12 +1423,14 @@ class ContentPanel(Widget):
                         left.add_row(
                             Text("···", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_l_{row_idx}", height=1,
+                            key=f"gap_l_{row_idx}",
+                            height=1,
                         )
                         right.add_row(
                             Text("···", style=_DIFF_GAP_STYLE),
                             self._content_cell(text, _DIFF_GAP_STYLE),
-                            key=f"gap_r_{row_idx}", height=1,
+                            key=f"gap_r_{row_idx}",
+                            height=1,
                         )
                         self._diff_row_lines.append(None)
                 elif t in ("hunk", "header"):
@@ -1378,7 +1441,8 @@ class ContentPanel(Widget):
                     ctx_tokens = precomputed[code_row_idx]
                     code_row_idx += 1
                     right_no = (
-                        f"{new_n}💬" if new_n is not None and new_n in self._comment_lines
+                        f"{new_n}💬"
+                        if new_n is not None and new_n in self._comment_lines
                         else (str(new_n) if new_n is not None else "")
                     )
                     left.add_row(
@@ -1428,9 +1492,7 @@ class ContentPanel(Widget):
         """指定行のコメント閲覧ダイアログを表示する。"""
         discs = self._comment_map.get(line_no, [])
         if discs:
-            self.app.push_screen(
-                CommentViewDialog(discs, line_no, self._current_file_path or "")
-            )
+            self.app.push_screen(CommentViewDialog(discs, line_no, self._current_file_path or ""))
 
     # --- クエリ ---
 
@@ -1527,6 +1589,7 @@ class ContentPanel(Widget):
             else:
                 from pygments.lexers import get_lexer_by_name
                 from pygments.util import ClassNotFound
+
                 try:
                     self._syntax_lexer = get_lexer_by_name(alias, stripnl=True)
                 except ClassNotFound:

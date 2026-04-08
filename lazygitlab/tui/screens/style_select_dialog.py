@@ -52,7 +52,9 @@ class StyleSelectDialog(ModalScreen[str | None]):
         self._current_style = current_style
 
     def compose(self) -> ComposeResult:
-        subtitle = f"Current: {self._current_style}" if self._current_style else "Current: (default)"
+        subtitle = (
+            f"Current: {self._current_style}" if self._current_style else "Current: (default)"
+        )
         with Vertical(id="style-select-container"):
             yield Label("[bold]🎨 Select Pygments Color Style[/bold]", id="style-select-title")
             yield Label(subtitle, id="style-select-subtitle")

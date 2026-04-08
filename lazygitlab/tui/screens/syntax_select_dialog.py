@@ -32,8 +32,7 @@ def _make_options(query: str) -> list[Option | Separator]:
     ]
     q = query.lower().strip()
     matched = (
-        [(name, alias) for name, alias in _LANGUAGE_LIST
-         if q in name.lower() or q in alias.lower()]
+        [(name, alias) for name, alias in _LANGUAGE_LIST if q in name.lower() or q in alias.lower()]
         if q
         else _LANGUAGE_LIST
     )

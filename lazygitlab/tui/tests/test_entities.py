@@ -177,14 +177,17 @@ class TestGetCommentLines:
 class TestWrapText:
     def test_short_line_unchanged(self) -> None:
         from lazygitlab.tui.widgets.content_panel import _wrap_text
+
         assert _wrap_text("hello", 20) == "hello"
 
     def test_exact_width_unchanged(self) -> None:
         from lazygitlab.tui.widgets.content_panel import _wrap_text
+
         assert _wrap_text("a" * 20, 20) == "a" * 20
 
     def test_long_line_wraps(self) -> None:
         from lazygitlab.tui.widgets.content_panel import _wrap_text
+
         result = _wrap_text("a" * 50, 20)
         lines = result.split("\n")
         assert len(lines) == 3
@@ -192,6 +195,7 @@ class TestWrapText:
 
     def test_empty_string(self) -> None:
         from lazygitlab.tui.widgets.content_panel import _wrap_text
+
         assert _wrap_text("", 20) == ""
 
 
@@ -200,7 +204,7 @@ class TestSBSCursorSync:
 
     def test_diff_row_lines_populated_after_left_render(self) -> None:
         """_parse_diff と _apply_context_filter の組み合わせが SBS に必要な行データを提供できることを確認する。"""
-        from lazygitlab.tui.widgets.content_panel import _parse_diff, _apply_context_filter
+        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
 
         diff = "@@ -1,2 +1,2 @@\n context\n-old\n+new\n"
         parsed = _parse_diff(diff)
@@ -226,7 +230,8 @@ class TestSBSRendering:
 """
 
     def test_parse_diff_has_expected_rows(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _parse_diff, _apply_context_filter
+        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
+
         parsed = _parse_diff(self.SAMPLE_DIFF)
         rows = _apply_context_filter(parsed, 5)
         types = [t for t, *_ in rows]
@@ -236,7 +241,7 @@ class TestSBSRendering:
 
     def test_sbs_pending_flush_balances_rows(self) -> None:
         """rem と add のペア数が一致する場合、左右の行数が等しい。"""
-        from lazygitlab.tui.widgets.content_panel import _parse_diff, _apply_context_filter
+        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
 
         parsed = _parse_diff(self.SAMPLE_DIFF)
         rows = _apply_context_filter(parsed, 5)
