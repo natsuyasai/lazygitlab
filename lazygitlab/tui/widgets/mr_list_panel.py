@@ -132,6 +132,7 @@ class MRListPanel(Widget):
                             next_page=paginated.next_page,
                         ),
                     )
+        tree.focus()
 
     async def _expand_mr(self, node: TreeNode[TreeNodeData], mr_iid: int) -> None:
         """MRノードを展開してファイル一覧を表示する。"""
@@ -175,6 +176,8 @@ class MRListPanel(Widget):
                 deleted_file=change.deleted_file,
                 renamed_file=change.renamed_file,
             )
+            split_label = label.split("/")
+            label = split_label[-1] + "/".join(split_label)
             if change.new_path in comment_files or (
                 change.old_path and change.old_path in comment_files
             ):
