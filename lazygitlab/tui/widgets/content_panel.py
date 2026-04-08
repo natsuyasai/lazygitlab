@@ -1577,18 +1577,27 @@ class ContentPanel(Widget):
 
     def action_diff_cursor_down(self) -> None:
         """差分表示でカーソルを1行下に移動する。"""
+        if self._view_state == ContentViewState.OVERVIEW:
+            self.query_one(RichLog).scroll_down(animate=False)
+            return
         table = self._focused_diff_table()
         if table is not None:
             table.action_cursor_down()
 
     def action_diff_cursor_up(self) -> None:
         """差分表示でカーソルを1行上に移動する。"""
+        if self._view_state == ContentViewState.OVERVIEW:
+            self.query_one(RichLog).scroll_up(animate=False)
+            return
         table = self._focused_diff_table()
         if table is not None:
             table.action_cursor_up()
 
     def action_diff_scroll_left(self) -> None:
         """差分表示を左にスクロールする。"""
+        if self._view_state == ContentViewState.OVERVIEW:
+            self.query_one(RichLog).scroll_left(animate=False)
+            return
         if self._view_state != ContentViewState.DIFF:
             return
         if self._diff_mode == DiffViewMode.UNIFIED:
@@ -1599,6 +1608,9 @@ class ContentPanel(Widget):
 
     def action_diff_scroll_right(self) -> None:
         """差分表示を右にスクロールする。"""
+        if self._view_state == ContentViewState.OVERVIEW:
+            self.query_one(RichLog).scroll_right(animate=False)
+            return
         if self._view_state != ContentViewState.DIFF:
             return
         if self._diff_mode == DiffViewMode.UNIFIED:
