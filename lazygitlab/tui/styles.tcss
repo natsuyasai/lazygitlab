@@ -118,6 +118,16 @@ CommentViewDialog {
     border: solid $primary-darken-2;
 }
 
+/* Unified diff コンテナ */
+#unified-container {
+    height: 100%;
+}
+
+#diff-table {
+    width: 1fr;
+    height: 100%;
+}
+
 /* Side-by-side diff コンテナ */
 #sbs-container {
     height: 100%;

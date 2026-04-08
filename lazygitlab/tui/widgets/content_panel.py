@@ -10,10 +10,13 @@ from pygments.lexers import get_lexer_for_filename as _get_lexer_for_filename
 from pygments.token import Token as _Token
 from pygments.util import ClassNotFound as _ClassNotFound
 from rich.markdown import Markdown as RichMarkdown
+from rich.segment import Segment
+from rich.style import Style
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
+from textual.strip import Strip
 from textual.widget import Widget
 from textual.widgets import DataTable, RichLog, Static
 
@@ -333,6 +336,48 @@ def _wrap_text(text: str, width: int) -> str:
     return "\n".join(text[i : i + width] for i in range(0, len(text), width))
 
 
+class DiffGutter(Widget):
+    """差分行の位置をスクロールバー横に示すガタービジェット。
+
+    差分全体の行タイプリスト（"add" / "rem" / "hunk" / その他）を受け取り、
+    ウィジェット高さに比例してカラーマーカーをレンダリングする。
+    """
+
+    DEFAULT_CSS = """
+    DiffGutter {
+        width: 1;
+        height: 100%;
+        background: $panel-darken-1;
+    }
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._row_types: list[str] = []
+
+    def set_rows(self, row_types: list[str]) -> None:
+        """差分行タイプリストをセットして再描画する。"""
+        self._row_types = row_types
+        self.refresh()
+
+    def render_line(self, y: int) -> Strip:
+        total = len(self._row_types)
+        height = self.size.height
+        if total == 0 or height == 0:
+            return Strip([Segment(" ")])
+        # このガター行が担当する差分行の範囲を求め、最優先のマークを選ぶ。
+        # 1点参照だと圧縮時に add/rem が飛ばされるため範囲スキャンが必要。
+        start = int(y * total / height)
+        end = min(max(start + 1, int((y + 1) * total / height)), total)
+        priority: dict[str, int] = {"rem": 0, "add": 1, "hunk": 2}
+        mark = min(self._row_types[start:end], key=lambda t: priority.get(t, 3))
+        if mark == "add":
+            return Strip([Segment("▌", Style(color="#88cc88"))])
+        if mark == "rem":
+            return Strip([Segment("▌", Style(color="#cc8888"))])
+        return Strip([Segment(" ")])
+
+
 class ContentPanel(Widget):
     """右ペイン: Overview・差分をレンダリングするウィジェット。"""
 
@@ -400,7 +445,11 @@ class ContentPanel(Widget):
     def compose(self) -> ComposeResult:
         yield Static("Select an MR from the list.", id="empty-hint")
         yield RichLog(id="content-log", highlight=False, markup=True, wrap=False)
-        yield DataTable(id="diff-table", cursor_type="row", show_header=True, zebra_stripes=False)
+        with Horizontal(id="unified-container"):
+            yield DataTable(
+                id="diff-table", cursor_type="row", show_header=True, zebra_stripes=False
+            )
+            yield DiffGutter(id="diff-gutter")
         with Horizontal(id="sbs-container"):
             yield DataTable(
                 id="diff-table-left", cursor_type="row", show_header=True, zebra_stripes=False
@@ -408,11 +457,11 @@ class ContentPanel(Widget):
             yield DataTable(
                 id="diff-table-right", cursor_type="row", show_header=True, zebra_stripes=False
             )
+            yield DiffGutter(id="diff-gutter-sbs")
 
     def on_mount(self) -> None:
         self.query_one(RichLog).display = False
-        table = self.query_one("#diff-table", DataTable)
-        table.display = False
+        self.query_one("#unified-container").display = False
         self.query_one("#sbs-container").display = False
 
         # SBS モードの横・縦スクロール同期を設定する
@@ -707,17 +756,17 @@ class ContentPanel(Widget):
     def _show_log(self) -> None:
         self.query_one("#empty-hint").display = False
         self.query_one(RichLog).display = True
-        self.query_one("#diff-table", DataTable).display = False
+        self.query_one("#unified-container").display = False
         self.query_one("#sbs-container").display = False
 
     def _show_diff_table(self) -> None:
         self.query_one("#empty-hint").display = False
         self.query_one(RichLog).display = False
         if self._diff_mode == DiffViewMode.UNIFIED:
-            self.query_one("#diff-table", DataTable).display = True
+            self.query_one("#unified-container").display = True
             self.query_one("#sbs-container").display = False
         else:
-            self.query_one("#diff-table", DataTable).display = False
+            self.query_one("#unified-container").display = False
             self.query_one("#sbs-container").display = True
 
     # --- 差分レンダラー ---
@@ -933,6 +982,7 @@ class ContentPanel(Widget):
             table.add_column("New", key="new_no", width=_LINE_NO_WIDTH)
             table.add_column("Content", key="content")
             self._render_unified_table(table, rows)
+            self._update_gutter(rows, "diff-gutter")
         else:
             left = self.query_one("#diff-table-left", DataTable)
             right = self.query_one("#diff-table-right", DataTable)
@@ -943,6 +993,14 @@ class ContentPanel(Widget):
             right.add_column("New#", key="new_no", width=_LINE_NO_WIDTH)
             right.add_column("New", key="new_content")
             self._render_sbs_tables(left, right, rows)
+            self._update_gutter(rows, "diff-gutter-sbs")
+
+    def _update_gutter(
+        self, rows: list[tuple[str, int | None, int | None, str]], gutter_id: str
+    ) -> None:
+        """差分行リストからガターのマークを更新する。"""
+        mark_types = [t if t in ("add", "rem", "hunk") else "" for t, *_ in rows]
+        self.query_one(f"#{gutter_id}", DiffGutter).set_rows(mark_types)
 
     def _content_cell(self, text: str, style: str = "") -> Text:
         """折り返しモードに応じてコンテンツセル用 Text を返す。"""
