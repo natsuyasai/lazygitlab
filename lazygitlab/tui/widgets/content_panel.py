@@ -967,12 +967,53 @@ class ContentPanel(Widget):
                 left.move_cursor(row=target_row, animate=False, scroll=False)
                 right.move_cursor(row=target_row, animate=False, scroll=False)
 
+    def _compute_overflow_comment_markers(
+        self,
+        rows: list[tuple[str, int | None, int | None, str]],
+    ) -> set[int]:
+        """diff に表示されていないコメント行を末尾のコード行に割り当てる。
+
+        表示範囲外のコメント行（行番号が diff の可視範囲を超えている等）について、
+        末尾のコード行から逆順に 💬 マークを割り当てる。
+
+        Returns:
+            💬 を追加表示すべき rows リストのインデックス集合。
+        """
+        if not self._comment_lines:
+            return set()
+
+        # diff に実際に表示されている行番号を収集
+        visible_lines: set[int] = set()
+        code_row_positions: list[int] = []  # add/rem/ctx 行の rows インデックス
+
+        for i, (t, old_n, new_n, _) in enumerate(rows):
+            if t in ("add", "ctx"):
+                if new_n is not None:
+                    visible_lines.add(new_n)
+                code_row_positions.append(i)
+            elif t == "rem":
+                if old_n is not None:
+                    visible_lines.add(old_n)
+                code_row_positions.append(i)
+
+        # 表示されていないコメント行
+        overflow = [line for line in sorted(self._comment_lines) if line not in visible_lines]
+        if not overflow:
+            return set()
+
+        # 末尾のコード行から逆順に割り当て（複数ある場合は順に上にずらす）
+        result: set[int] = set()
+        for i in range(min(len(overflow), len(code_row_positions))):
+            result.add(code_row_positions[-(i + 1)])
+        return result
+
     def _render_diff(self) -> None:
         """現在の状態で差分を DataTable にレンダリングする（ネットワークアクセスなし）。"""
         self._diff_row_lines = []
         self._gap_row_ranges = {}
         self._gap_row_actions = {}
         rows = self._build_augmented_rows()
+        overflow_markers = self._compute_overflow_comment_markers(rows)
 
         table = self.query_one("#diff-table", DataTable)
         table.clear(columns=True)
@@ -981,7 +1022,7 @@ class ContentPanel(Widget):
             table.add_column("Old", key="old_no", width=5)
             table.add_column("New", key="new_no", width=_LINE_NO_WIDTH)
             table.add_column("Content", key="content")
-            self._render_unified_table(table, rows)
+            self._render_unified_table(table, rows, overflow_markers)
             self._update_gutter(rows, "diff-gutter")
         else:
             left = self.query_one("#diff-table-left", DataTable)
@@ -992,7 +1033,7 @@ class ContentPanel(Widget):
             left.add_column("Old", key="old_content")
             right.add_column("New#", key="new_no", width=_LINE_NO_WIDTH)
             right.add_column("New", key="new_content")
-            self._render_sbs_tables(left, right, rows)
+            self._render_sbs_tables(left, right, rows, overflow_markers)
             self._update_gutter(rows, "diff-gutter-sbs")
 
     def _update_gutter(
@@ -1106,6 +1147,7 @@ class ContentPanel(Widget):
         self,
         table: DataTable,
         rows: list[tuple[str, int | None, int | None, str]],
+        overflow_markers: set[int],
     ) -> None:
         """unified diff の行リストを DataTable に描画する。"""
         row_idx = 0
@@ -1118,7 +1160,8 @@ class ContentPanel(Widget):
         precomputed = self._lex_lines(code_lines)
         code_row_idx = 0
 
-        for t, old_n, new_n, text in rows:
+        for rows_pos, (t, old_n, new_n, text) in enumerate(rows):
+            has_overflow = rows_pos in overflow_markers
             if t in ("gap", "top_load", "bottom_load", "inter_above", "inter_below", "inter_all"):
                 gap_size = (
                     (new_n - old_n + 1)
@@ -1223,7 +1266,11 @@ class ContentPanel(Widget):
             elif t == "add":
                 tokens = precomputed[code_row_idx]
                 code_row_idx += 1
-                no_label = f"{new_n}💬" if new_n in self._comment_lines else str(new_n)
+                no_label = (
+                    f"{new_n}💬"
+                    if (new_n in self._comment_lines or has_overflow)
+                    else str(new_n)
+                )
                 table.add_row(
                     Text("", style=_DIFF_ADD_STYLE),
                     Text(no_label, style=_DIFF_ADD_STYLE),
@@ -1237,7 +1284,11 @@ class ContentPanel(Widget):
             elif t == "rem":
                 tokens = precomputed[code_row_idx]
                 code_row_idx += 1
-                no_label = f"{old_n}💬" if old_n in self._comment_lines else str(old_n)
+                no_label = (
+                    f"{old_n}💬"
+                    if (old_n in self._comment_lines or has_overflow)
+                    else str(old_n)
+                )
                 table.add_row(
                     Text(no_label, style=_DIFF_REM_STYLE),
                     Text("", style=_DIFF_REM_STYLE),
@@ -1253,7 +1304,7 @@ class ContentPanel(Widget):
                 code_row_idx += 1
                 no_label = (
                     f"{new_n}💬"
-                    if new_n in self._comment_lines
+                    if (new_n in self._comment_lines or has_overflow)
                     else (str(new_n) if new_n is not None else "")
                 )
                 table.add_row(
@@ -1271,6 +1322,7 @@ class ContentPanel(Widget):
         left: DataTable,
         right: DataTable,
         rows: list[tuple[str, int | None, int | None, str]],
+        overflow_markers: set[int],
     ) -> None:
         """side-by-side の左右テーブルを同時に描画する。"""
         row_idx = 0
@@ -1289,8 +1341,9 @@ class ContentPanel(Widget):
         precomputed = self._lex_lines(code_lines)
         code_row_idx = 0
 
-        pending_rem: list[tuple[int | None, str, list[tuple[Any, str]]]] = []
-        pending_add: list[tuple[int | None, str, list[tuple[Any, str]]]] = []
+        # pending タプル: (line_no, text, tokens, has_overflow)
+        pending_rem: list[tuple[int | None, str, list[tuple[Any, str]], bool]] = []
+        pending_add: list[tuple[int | None, str, list[tuple[Any, str]], bool]] = []
 
         def _flush() -> None:
             nonlocal row_idx
@@ -1298,16 +1351,20 @@ class ContentPanel(Widget):
                 return
             max_len = max(len(pending_rem), len(pending_add))
             for k in range(max_len):
-                old_n2, old_t, old_tok = pending_rem[k] if k < len(pending_rem) else (None, "", [])
-                new_n2, new_t, new_tok = pending_add[k] if k < len(pending_add) else (None, "", [])
+                old_n2, old_t, old_tok, old_ov = (
+                    pending_rem[k] if k < len(pending_rem) else (None, "", [], False)
+                )
+                new_n2, new_t, new_tok, new_ov = (
+                    pending_add[k] if k < len(pending_add) else (None, "", [], False)
+                )
                 left_no = (
                     f"{old_n2}💬"
-                    if old_n2 and old_n2 in self._comment_lines
+                    if old_n2 and (old_n2 in self._comment_lines or old_ov)
                     else (str(old_n2) if old_n2 else "")
                 )
                 right_no = (
                     f"{new_n2}💬"
-                    if new_n2 and new_n2 in self._comment_lines
+                    if new_n2 and (new_n2 in self._comment_lines or new_ov)
                     else (str(new_n2) if new_n2 else "")
                 )
                 left.add_row(
@@ -1335,14 +1392,15 @@ class ContentPanel(Widget):
             pending_rem.clear()
             pending_add.clear()
 
-        for t, old_n, new_n, text in rows:
+        for rows_pos, (t, old_n, new_n, text) in enumerate(rows):
+            has_overflow = rows_pos in overflow_markers
             if t == "rem":
                 stripped = text[1:] if text.startswith("-") else text
-                pending_rem.append((old_n, stripped, precomputed[code_row_idx]))
+                pending_rem.append((old_n, stripped, precomputed[code_row_idx], has_overflow))
                 code_row_idx += 1
             elif t == "add":
                 stripped = text[1:] if text.startswith("+") else text
-                pending_add.append((new_n, stripped, precomputed[code_row_idx]))
+                pending_add.append((new_n, stripped, precomputed[code_row_idx], has_overflow))
                 code_row_idx += 1
             else:
                 _flush()
@@ -1500,7 +1558,7 @@ class ContentPanel(Widget):
                     code_row_idx += 1
                     right_no = (
                         f"{new_n}💬"
-                        if new_n is not None and new_n in self._comment_lines
+                        if new_n is not None and (new_n in self._comment_lines or has_overflow)
                         else (str(new_n) if new_n is not None else "")
                     )
                     left.add_row(

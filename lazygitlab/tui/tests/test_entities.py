@@ -271,3 +271,86 @@ class TestSBSRendering:
         flush()
 
         assert len(left_rows) == len(right_rows)
+
+
+class TestOverflowCommentMarkers:
+    """表示範囲外コメントの overflow マーカー割り当てテスト。"""
+
+    def _make_panel(self, comment_lines: set[int]):
+        """ContentPanel の _compute_overflow_comment_markers だけ使えるスタブを作る。"""
+        from types import SimpleNamespace
+
+        from lazygitlab.tui.widgets.content_panel import ContentPanel
+
+        # インスタンスを作らずにメソッドだけ借用する
+        stub = SimpleNamespace(_comment_lines=comment_lines)
+        stub._compute_overflow_comment_markers = (
+            ContentPanel._compute_overflow_comment_markers.__get__(stub)
+        )
+        return stub
+
+    def test_no_comments_returns_empty(self) -> None:
+        """コメントがない場合は空集合を返す。"""
+        panel = self._make_panel(set())
+        rows = [("ctx", 1, 1, " line")]
+        assert panel._compute_overflow_comment_markers(rows) == set()
+
+    def test_visible_comment_not_overflow(self) -> None:
+        """diff に表示されているコメント行はオーバーフローにならない。"""
+        panel = self._make_panel({1})
+        rows = [("ctx", 1, 1, " line")]
+        assert panel._compute_overflow_comment_markers(rows) == set()
+
+    def test_single_overflow_maps_to_last_row(self) -> None:
+        """表示範囲外のコメント1件が最後のコード行に割り当てられる。"""
+        panel = self._make_panel({999})  # 999行目はdiffに存在しない
+        rows = [
+            ("ctx", 1, 1, " line1"),
+            ("ctx", 2, 2, " line2"),
+            ("add", None, 3, "+line3"),
+        ]
+        result = panel._compute_overflow_comment_markers(rows)
+        # rows インデックス 2 (最後のコード行) が選ばれる
+        assert result == {2}
+
+    def test_multiple_overflows_stack_upward(self) -> None:
+        """複数のオーバーフローコメントが末尾から逆順に割り当てられる。"""
+        panel = self._make_panel({100, 200, 300})  # すべて範囲外
+        rows = [
+            ("ctx", 1, 1, " a"),
+            ("ctx", 2, 2, " b"),
+            ("ctx", 3, 3, " c"),
+            ("add", None, 4, "+d"),
+        ]
+        result = panel._compute_overflow_comment_markers(rows)
+        # 3件のオーバーフロー → 末尾3行 (インデックス 1, 2, 3) が選ばれる
+        assert result == {1, 2, 3}
+
+    def test_overflow_count_capped_by_visible_rows(self) -> None:
+        """オーバーフロー件数が表示行数を超えても上限はコード行数まで。"""
+        panel = self._make_panel({100, 200, 300, 400, 500})  # 5件
+        rows = [
+            ("ctx", 1, 1, " a"),
+            ("ctx", 2, 2, " b"),
+        ]
+        result = panel._compute_overflow_comment_markers(rows)
+        # コード行は2行しかないので最大2件
+        assert result == {0, 1}
+
+    def test_rem_row_visible_line_counted(self) -> None:
+        """rem 行の old_n が visible_lines に含まれていれば overflow にならない。"""
+        panel = self._make_panel({5})
+        rows = [("rem", 5, None, "-line")]
+        assert panel._compute_overflow_comment_markers(rows) == set()
+
+    def test_hunk_and_gap_rows_not_code_rows(self) -> None:
+        """hunk/gap 行はコード行としてカウントされない。"""
+        panel = self._make_panel({999})
+        rows = [
+            ("hunk", None, None, "@@ -1,1 +1,1 @@"),
+            ("gap", 1, 10, "..."),
+            ("ctx", 1, 1, " line"),
+        ]
+        result = panel._compute_overflow_comment_markers(rows)
+        # コード行はインデックス2のctxのみ
+        assert result == {2}
