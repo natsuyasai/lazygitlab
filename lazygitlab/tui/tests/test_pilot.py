@@ -251,3 +251,72 @@ def test_content_panel_has_required_bindings():
     assert "w" in keys
     assert "t" in keys
     assert "c" in keys
+
+
+@pytest.mark.asyncio
+async def test_clear_content_hides_unified_container():
+    """clear_content() 後に #unified-container が非表示になることを確認する。
+
+    バグ再現: clear_content() が #diff-table.display = False にするだけで
+    #unified-container を隠さないため、次回の diff 表示時に差分領域が空白になる。
+    """
+    from textual.app import App, ComposeResult
+
+    from lazygitlab.tui.entities import DiffViewMode
+    from lazygitlab.tui.widgets.content_panel import ContentPanel
+
+    class _TestApp(App):
+        def compose(self) -> ComposeResult:
+            yield ContentPanel(MagicMock(), MagicMock())
+
+    test_app = _TestApp()
+    async with test_app.run_test() as pilot:
+        panel = test_app.query_one(ContentPanel)
+        panel._diff_mode = DiffViewMode.UNIFIED
+        # unified モードで diff 表示領域を表示する
+        panel._show_diff_table()
+        await pilot.pause()
+        unified_container = test_app.query_one("#unified-container")
+        assert unified_container.display is True
+        # clear_content() でリセット
+        await panel.clear_content()
+        await pilot.pause()
+        # unified-container も非表示になっていること
+        assert unified_container.display is False
+
+
+@pytest.mark.asyncio
+async def test_diff_table_visible_after_clear_and_reload():
+    """clear_content() → _show_diff_table() で #diff-table が表示されることを確認する。
+
+    バグ再現シナリオ:
+    1. unified モードで diff 表示 → #diff-table.display=True
+    2. MR 切り替えで clear_content() → #unified-container が非表示になる
+    3. 別ファイルの diff 表示 → #unified-container と #diff-table が両方表示される
+    """
+    from textual.app import App, ComposeResult
+    from textual.widgets import DataTable
+
+    from lazygitlab.tui.entities import DiffViewMode
+    from lazygitlab.tui.widgets.content_panel import ContentPanel
+
+    class _TestApp(App):
+        def compose(self) -> ComposeResult:
+            yield ContentPanel(MagicMock(), MagicMock())
+
+    test_app = _TestApp()
+    async with test_app.run_test() as pilot:
+        panel = test_app.query_one(ContentPanel)
+        panel._diff_mode = DiffViewMode.UNIFIED
+        # 1回目の diff 表示
+        panel._show_diff_table()
+        await pilot.pause()
+        # clear_content() でリセット（MR 切り替えに相当）
+        await panel.clear_content()
+        await pilot.pause()
+        # 2回目の diff 表示（別ファイル選択に相当）
+        panel._show_diff_table()
+        await pilot.pause()
+        # #diff-table が表示されていること（修正前はここで False になる）
+        table = test_app.query_one("#diff-table", DataTable)
+        assert table.display is True

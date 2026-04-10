@@ -1854,9 +1854,8 @@ class ContentPanel(Widget):
         log = self.query_one(RichLog)
         log.clear()
         log.display = False
-        table = self.query_one("#diff-table", DataTable)
-        table.clear(columns=True)
-        table.display = False
+        self.query_one("#diff-table", DataTable).clear(columns=True)
+        self.query_one("#unified-container").display = False
         self.query_one("#diff-table-left", DataTable).clear(columns=True)
         self.query_one("#diff-table-right", DataTable).clear(columns=True)
         self.query_one("#sbs-container").display = False
