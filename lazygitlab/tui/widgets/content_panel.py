@@ -1612,6 +1612,12 @@ class ContentPanel(Widget):
 
     # --- クエリ ---
 
+    def get_current_file_path(self) -> str | None:
+        """diff 表示中のファイルパス（リポジトリルートからの相対パス）を返す。"""
+        if self._view_state == ContentViewState.DIFF:
+            return self._current_file_path
+        return None
+
     def get_selected_line(self) -> tuple[str, int] | None:
         """現在選択中の (file_path, line_number) を返す。行未選択時は行1を使用。"""
         if self._view_state == ContentViewState.DIFF and self._current_file_path is not None:

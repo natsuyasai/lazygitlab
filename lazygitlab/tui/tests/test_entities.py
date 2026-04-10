@@ -203,7 +203,7 @@ class TestSBSCursorSync:
     """SBS カーソル同期ロジックのテスト（純関数）。"""
 
     def test_diff_row_lines_populated_after_left_render(self) -> None:
-        """_parse_diff と _apply_context_filter の組み合わせが SBS に必要な行データを提供できることを確認する。"""
+        """_parse_diff と _apply_context_filter の組み合わせが SBS に必要な行データを提供できる。"""
         from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
 
         diff = "@@ -1,2 +1,2 @@\n context\n-old\n+new\n"

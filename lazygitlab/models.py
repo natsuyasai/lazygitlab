@@ -13,6 +13,7 @@ class AppConfig:
     gitlab_url: str
     token: str
     editor: str = "vi"
+    terminal: str = ""
     log_level: str = "INFO"
     theme: str = "dark"
     remote_name: str = ""

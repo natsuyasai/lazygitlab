@@ -24,6 +24,7 @@ token = "{token}"
 
 [editor]
 command = "{editor}"
+# terminal = "xterm -e"  # open editor in new terminal (auto-detected if omitted)
 
 [logging]
 level = "INFO"
@@ -151,6 +152,7 @@ class ConfigManager:
             gitlab_url=gitlab_section.get("url", "https://gitlab.com"),
             token=auth_section.get("token", ""),
             editor=editor_section.get("command", default_editor),
+            terminal=editor_section.get("terminal", ""),
             log_level=logging_section.get("level", "INFO").upper(),
             theme=appearance_section.get("theme", "dark"),
             remote_name=git_section.get("remote_name", ""),
