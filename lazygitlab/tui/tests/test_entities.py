@@ -12,7 +12,7 @@ from lazygitlab.tui.entities import (
     TreeNodeType,
     get_file_change_label,
 )
-from lazygitlab.tui.widgets.content_panel import _format_diff_line
+from lazygitlab.tui.widgets._diff_renderer import _format_diff_line
 from lazygitlab.tui.widgets._overview import _get_comment_lines
 
 
@@ -189,17 +189,17 @@ class TestGetCommentLines:
 
 class TestWrapText:
     def test_short_line_unchanged(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _wrap_text
+        from lazygitlab.tui.widgets._diff_renderer import _wrap_text
 
         assert _wrap_text("hello", 20) == "hello"
 
     def test_exact_width_unchanged(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _wrap_text
+        from lazygitlab.tui.widgets._diff_renderer import _wrap_text
 
         assert _wrap_text("a" * 20, 20) == "a" * 20
 
     def test_long_line_wraps(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _wrap_text
+        from lazygitlab.tui.widgets._diff_renderer import _wrap_text
 
         result = _wrap_text("a" * 50, 20)
         lines = result.split("\n")
@@ -207,7 +207,7 @@ class TestWrapText:
         assert all(len(line) <= 20 for line in lines)
 
     def test_empty_string(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _wrap_text
+        from lazygitlab.tui.widgets._diff_renderer import _wrap_text
 
         assert _wrap_text("", 20) == ""
 

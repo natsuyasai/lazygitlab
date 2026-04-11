@@ -103,7 +103,7 @@ async def test_diff_gutter_set_rows() -> None:
     """DiffGutter の set_rows が行タイプリストを設定することを確認する。"""
     from textual.app import App, ComposeResult
 
-    from lazygitlab.tui.widgets.content_panel import DiffGutter
+    from lazygitlab.tui.widgets._diff_renderer import DiffGutter
 
     class _TestApp(App):
         def compose(self) -> ComposeResult:
