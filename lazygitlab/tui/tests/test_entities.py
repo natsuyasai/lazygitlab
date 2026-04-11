@@ -12,7 +12,8 @@ from lazygitlab.tui.entities import (
     TreeNodeType,
     get_file_change_label,
 )
-from lazygitlab.tui.widgets.content_panel import _format_diff_line, _get_comment_lines
+from lazygitlab.tui.widgets.content_panel import _format_diff_line
+from lazygitlab.tui.widgets._overview import _get_comment_lines
 
 
 class TestDiffViewMode:
@@ -214,7 +215,7 @@ class TestWrapText:
 class TestBuildOverviewText:
     def test_basic_overview_contains_title(self) -> None:
         from lazygitlab.models import MergeRequestDetail
-        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+        from lazygitlab.tui.widgets._overview import _build_overview_text
 
         detail = MergeRequestDetail(
             iid=1,
@@ -233,7 +234,7 @@ class TestBuildOverviewText:
 
     def test_no_description_shows_placeholder(self) -> None:
         from lazygitlab.models import MergeRequestDetail
-        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+        from lazygitlab.tui.widgets._overview import _build_overview_text
 
         detail = MergeRequestDetail(
             iid=2,
@@ -251,7 +252,7 @@ class TestBuildOverviewText:
 
     def test_with_description_shows_description(self) -> None:
         from lazygitlab.models import MergeRequestDetail
-        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+        from lazygitlab.tui.widgets._overview import _build_overview_text
 
         detail = MergeRequestDetail(
             iid=3,
@@ -270,7 +271,7 @@ class TestBuildOverviewText:
 
     def test_with_discussions(self) -> None:
         from lazygitlab.models import Discussion, MergeRequestDetail, Note
-        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+        from lazygitlab.tui.widgets._overview import _build_overview_text
 
         note = Note(
             id=1,
@@ -297,7 +298,7 @@ class TestBuildOverviewText:
 
     def test_with_image_in_description(self) -> None:
         from lazygitlab.models import MergeRequestDetail
-        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+        from lazygitlab.tui.widgets._overview import _build_overview_text
 
         detail = MergeRequestDetail(
             iid=5,
@@ -316,7 +317,7 @@ class TestBuildOverviewText:
 
     def test_inline_comment_position_shown(self) -> None:
         from lazygitlab.models import Discussion, MergeRequestDetail, Note, NotePosition
-        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+        from lazygitlab.tui.widgets._overview import _build_overview_text
 
         note = Note(
             id=1,
@@ -344,25 +345,25 @@ class TestBuildOverviewText:
 
 class TestExtractImages:
     def test_no_images(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _extract_images
+        from lazygitlab.tui.widgets._overview import _extract_images
 
         assert _extract_images("No images here") == []
 
     def test_single_image(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _extract_images
+        from lazygitlab.tui.widgets._overview import _extract_images
 
         result = _extract_images("![alt](https://example.com/img.png)")
         assert result == [("alt", "https://example.com/img.png")]
 
     def test_multiple_images(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _extract_images
+        from lazygitlab.tui.widgets._overview import _extract_images
 
         text = "![a](http://a.com/1.png) and ![b](http://b.com/2.png)"
         result = _extract_images(text)
         assert len(result) == 2
 
     def test_empty_alt(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _extract_images
+        from lazygitlab.tui.widgets._overview import _extract_images
 
         result = _extract_images("![](https://example.com/img.png)")
         assert result == [("", "https://example.com/img.png")]
@@ -370,14 +371,14 @@ class TestExtractImages:
 
 class TestBuildCommentMap:
     def test_empty_discussions(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _build_comment_map
+        from lazygitlab.tui.widgets._overview import _build_comment_map
 
         result = _build_comment_map([], "file.py")
         assert result == {}
 
     def test_maps_line_to_discussion(self) -> None:
         from lazygitlab.models import Discussion, Note, NotePosition
-        from lazygitlab.tui.widgets.content_panel import _build_comment_map
+        from lazygitlab.tui.widgets._overview import _build_comment_map
 
         note = Note(
             id=1,
@@ -393,7 +394,7 @@ class TestBuildCommentMap:
 
     def test_different_file_excluded(self) -> None:
         from lazygitlab.models import Discussion, Note, NotePosition
-        from lazygitlab.tui.widgets.content_panel import _build_comment_map
+        from lazygitlab.tui.widgets._overview import _build_comment_map
 
         note = Note(
             id=1,
@@ -408,7 +409,7 @@ class TestBuildCommentMap:
 
     def test_deduplicates_discussion(self) -> None:
         from lazygitlab.models import Discussion, Note, NotePosition
-        from lazygitlab.tui.widgets.content_panel import _build_comment_map
+        from lazygitlab.tui.widgets._overview import _build_comment_map
 
         note1 = Note(
             id=1,
