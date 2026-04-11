@@ -433,7 +433,7 @@ class TestGetTokenColor:
     def test_known_token_returns_color(self) -> None:
         from pygments.token import Token
 
-        from lazygitlab.tui.widgets.content_panel import _get_token_color
+        from lazygitlab.tui.widgets._syntax import _get_token_color
 
         result = _get_token_color(Token.Keyword)
         assert result is not None
@@ -441,7 +441,7 @@ class TestGetTokenColor:
     def test_unknown_token_returns_none(self) -> None:
         from pygments.token import Token
 
-        from lazygitlab.tui.widgets.content_panel import _get_token_color
+        from lazygitlab.tui.widgets._syntax import _get_token_color
 
         result = _get_token_color(Token.Other)
         assert result is None
@@ -449,7 +449,7 @@ class TestGetTokenColor:
     def test_subtoken_falls_back_to_parent(self) -> None:
         from pygments.token import Token
 
-        from lazygitlab.tui.widgets.content_panel import _get_token_color
+        from lazygitlab.tui.widgets._syntax import _get_token_color
 
         # Token.String is in _SYNTAX_COLORS, Token.String.Doc is also mapped separately
         result = _get_token_color(Token.String)
@@ -516,32 +516,32 @@ class TestFindFirstLastNewLine:
 
 class TestGetLexerForPath:
     def test_python_file_returns_lexer(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _get_lexer_for_path
+        from lazygitlab.tui.widgets._syntax import _get_lexer_for_path
 
         lexer = _get_lexer_for_path("foo.py")
         assert lexer is not None
 
     def test_unknown_extension_returns_none(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _get_lexer_for_path
+        from lazygitlab.tui.widgets._syntax import _get_lexer_for_path
 
         result = _get_lexer_for_path("foo.unknownextension12345")
         assert result is None
 
     def test_none_returns_none(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _get_lexer_for_path
+        from lazygitlab.tui.widgets._syntax import _get_lexer_for_path
 
         assert _get_lexer_for_path(None) is None
 
 
 class TestBuildColorsFromPygmentsStyle:
     def test_valid_style_returns_dict(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _build_colors_from_pygments_style
+        from lazygitlab.tui.widgets._syntax import _build_colors_from_pygments_style
 
         result = _build_colors_from_pygments_style("monokai")
         assert isinstance(result, dict)
 
     def test_invalid_style_returns_empty_dict(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _build_colors_from_pygments_style
+        from lazygitlab.tui.widgets._syntax import _build_colors_from_pygments_style
 
         result = _build_colors_from_pygments_style("no_such_style_xyz")
         assert result == {}
