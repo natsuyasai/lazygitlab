@@ -67,6 +67,7 @@ _DIFF_GAP_STYLE = "dim italic"
 # 行番号列の幅（最大4桁 + 💬マーカー(2セル) = 6）
 _LINE_NO_WIDTH = 6
 
+
 def _format_diff_line(line: str) -> str:
     """差分の1行を Rich マークアップでフォーマットする（テスト用に保持）。"""
     if line.startswith("@@"):
