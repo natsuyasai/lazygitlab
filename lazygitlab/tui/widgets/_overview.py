@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from lazygitlab.models import Discussion
+from lazygitlab.models import Discussion, MergeRequestDetail
 
 _IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 
@@ -14,7 +14,7 @@ def _extract_images(text: str) -> list[tuple[str, str]]:
     return _IMAGE_PATTERN.findall(text)
 
 
-def _build_overview_text(mr_detail, discussions: list[Discussion]) -> str:
+def _build_overview_text(mr_detail: MergeRequestDetail, discussions: list[Discussion]) -> str:
     """MR詳細とディスカッションからOverview表示テキストを構築する。"""
     lines: list[str] = []
     lines.append(f"# !{mr_detail.iid} {mr_detail.title}")
