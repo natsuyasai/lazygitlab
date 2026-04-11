@@ -458,7 +458,7 @@ class TestGetTokenColor:
 
 class TestParseDiffHeaderLines:
     def test_header_lines_parsed(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _parse_diff
+        from lazygitlab.tui.widgets._diff_parser import _parse_diff
 
         diff = "--- a/foo.py\n+++ b/foo.py\n@@ -1,2 +1,2 @@\n context\n"
         parsed = _parse_diff(diff)
@@ -466,14 +466,14 @@ class TestParseDiffHeaderLines:
         assert "header" in types
 
     def test_empty_diff(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _parse_diff
+        from lazygitlab.tui.widgets._diff_parser import _parse_diff
 
         assert _parse_diff("") == []
 
 
 class TestApplyContextFilterGap:
     def test_gap_created_for_far_context_lines(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
+        from lazygitlab.tui.widgets._diff_parser import _apply_context_filter, _parse_diff
 
         # Many context lines far from changes
         diff = "@@ -1,20 +1,20 @@\n"
@@ -484,7 +484,7 @@ class TestApplyContextFilterGap:
         assert "gap" in types
 
     def test_forced_ctx_indices_shown(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
+        from lazygitlab.tui.widgets._diff_parser import _apply_context_filter, _parse_diff
 
         diff = "@@ -1,10 +1,10 @@\n" + " ctx\n" * 10
         parsed = _parse_diff(diff)
@@ -498,7 +498,7 @@ class TestApplyContextFilterGap:
 
 class TestFindFirstLastNewLine:
     def test_finds_first_and_last(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _find_first_last_new_line, _parse_diff
+        from lazygitlab.tui.widgets._diff_parser import _find_first_last_new_line, _parse_diff
 
         diff = "@@ -1,3 +1,3 @@\n context\n+added\n context\n"
         parsed = _parse_diff(diff)
@@ -507,7 +507,7 @@ class TestFindFirstLastNewLine:
         assert last >= first
 
     def test_empty_parsed_returns_zeros(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _find_first_last_new_line
+        from lazygitlab.tui.widgets._diff_parser import _find_first_last_new_line
 
         first, last = _find_first_last_new_line([])
         assert first == 0
@@ -552,7 +552,7 @@ class TestSBSCursorSync:
 
     def test_diff_row_lines_populated_after_left_render(self) -> None:
         """_parse_diff と _apply_context_filter の組み合わせが SBS に必要な行データを提供できる。"""
-        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
+        from lazygitlab.tui.widgets._diff_parser import _apply_context_filter, _parse_diff
 
         diff = "@@ -1,2 +1,2 @@\n context\n-old\n+new\n"
         parsed = _parse_diff(diff)
@@ -578,7 +578,7 @@ class TestSBSRendering:
 """
 
     def test_parse_diff_has_expected_rows(self) -> None:
-        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
+        from lazygitlab.tui.widgets._diff_parser import _apply_context_filter, _parse_diff
 
         parsed = _parse_diff(self.SAMPLE_DIFF)
         rows = _apply_context_filter(parsed, 5)
@@ -589,7 +589,7 @@ class TestSBSRendering:
 
     def test_sbs_pending_flush_balances_rows(self) -> None:
         """rem と add のペア数が一致する場合、左右の行数が等しい。"""
-        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
+        from lazygitlab.tui.widgets._diff_parser import _apply_context_filter, _parse_diff
 
         parsed = _parse_diff(self.SAMPLE_DIFF)
         rows = _apply_context_filter(parsed, 5)
