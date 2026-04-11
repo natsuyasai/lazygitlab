@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import gitlab.exceptions
 import pytest
 
 from lazygitlab.models import AppConfig
-from lazygitlab.services.exceptions import FileNotFoundInMRError
+from lazygitlab.services.exceptions import (
+    FileNotFoundInMRError,
+    GitLabConnectionError,
+    MRNotFoundError,
+)
 from lazygitlab.services.gitlab_client import CurrentUser, GitLabClient
 from lazygitlab.services.mr_service import MRService
 from lazygitlab.services.types import PaginatedResult
@@ -202,3 +207,254 @@ class TestGetMrDiff:
             service._project.mergerequests.get = MagicMock(return_value=mr)
             with pytest.raises(FileNotFoundInMRError):
                 await service.get_mr_diff(1, "missing.py")
+
+    async def test_404_raises_mr_not_found(self, service: MRService) -> None:
+        exc = gitlab.exceptions.GitlabGetError(response_code=404, error_message="Not Found")
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            raise exc
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            with pytest.raises(MRNotFoundError):
+                await service.get_mr_diff(1, "foo.py")
+
+    async def test_cache_hit_returns_cached(self, service: MRService) -> None:
+        mr = MagicMock()
+        mr.changes = MagicMock(
+            return_value={
+                "changes": [
+                    {
+                        "old_path": "bar.py",
+                        "new_path": "bar.py",
+                        "diff": "@@ -1 +1 @@",
+                        "new_file": False,
+                        "deleted_file": False,
+                        "renamed_file": False,
+                    }
+                ]
+            }
+        )
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            service._project.mergerequests.get = MagicMock(return_value=mr)
+            diff1 = await service.get_mr_diff(1, "bar.py")
+        diff2 = service._diff_cache.get((1, "bar.py"))
+        assert diff1.file_path == diff2.file_path
+
+
+class TestGetMrChanges:
+    async def test_returns_file_changes(self, service: MRService) -> None:
+        mr = MagicMock()
+        mr.changes = MagicMock(
+            return_value={
+                "changes": [
+                    {
+                        "old_path": "a.py",
+                        "new_path": "a.py",
+                        "new_file": False,
+                        "deleted_file": False,
+                        "renamed_file": False,
+                    }
+                ]
+            }
+        )
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            service._project.mergerequests.get = MagicMock(return_value=mr)
+            changes = await service.get_mr_changes(1)
+        assert len(changes) == 1
+        assert changes[0].new_path == "a.py"
+
+    async def test_cache_hit(self, service: MRService) -> None:
+        mr = MagicMock()
+        mr.changes = MagicMock(return_value={"changes": []})
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            service._project.mergerequests.get = MagicMock(return_value=mr)
+            r1 = await service.get_mr_changes(1)
+        r2 = service._changes_cache.get(1)
+        assert r1 is r2
+
+    async def test_404_raises_mr_not_found(self, service: MRService) -> None:
+        exc = gitlab.exceptions.GitlabGetError(response_code=404, error_message="Not Found")
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            raise exc
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            with pytest.raises(MRNotFoundError):
+                await service.get_mr_changes(1)
+
+
+class TestGetReviewerIsMe:
+    async def test_returns_paginated_result(self, service: MRService) -> None:
+        mr = _make_mr(iid=5)
+        mock_list = _make_mr_list(mr)
+        with patch("asyncio.to_thread", new=AsyncMock(return_value=mock_list)):
+            result = await service.get_reviewer_is_me()
+        assert isinstance(result, PaginatedResult)
+        assert len(result.items) == 1
+
+
+class TestGetCreatedByMe:
+    async def test_returns_paginated_result(self, service: MRService) -> None:
+        mr = _make_mr(iid=3, author_username="me")
+        mock_list = _make_mr_list(mr)
+        with patch("asyncio.to_thread", new=AsyncMock(return_value=mock_list)):
+            result = await service.get_created_by_me()
+        assert isinstance(result, PaginatedResult)
+        assert len(result.items) == 1
+
+
+class TestGetUnassigned:
+    async def test_returns_paginated_result(self, service: MRService) -> None:
+        mr = _make_mr(iid=4)
+        mock_list = _make_mr_list(mr)
+        with patch("asyncio.to_thread", new=AsyncMock(return_value=mock_list)):
+            result = await service.get_unassigned()
+        assert isinstance(result, PaginatedResult)
+
+
+class TestGetMrDetailErrors:
+    async def test_404_raises_mr_not_found(self, service: MRService) -> None:
+        exc = gitlab.exceptions.GitlabGetError(response_code=404, error_message="Not Found")
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            raise exc
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            with pytest.raises(MRNotFoundError):
+                await service.get_mr_detail(999)
+
+    async def test_non_404_raises_connection_error(self, service: MRService) -> None:
+        exc = gitlab.exceptions.GitlabGetError(response_code=500, error_message="Server Error")
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            raise exc
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            with pytest.raises(GitLabConnectionError):
+                await service.get_mr_detail(1)
+
+
+class TestGetFileLinesMethod:
+    async def test_returns_lines(self, service: MRService) -> None:
+        from lazygitlab.models import MergeRequestDetail
+
+        detail = MergeRequestDetail(
+            iid=1,
+            title="T",
+            description="",
+            author="alice",
+            status="opened",
+            labels=[],
+            web_url="",
+            created_at="",
+            updated_at="",
+            source_branch="feature",
+        )
+        service._detail_cache.set(1, detail)
+
+        mock_file = MagicMock()
+        mock_file.decode.return_value.decode.return_value.splitlines.return_value = [
+            "line1",
+            "line2",
+        ]
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return mock_file
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            lines = await service.get_file_lines(1, "foo.py")
+        assert "line1" in lines
+        assert "line2" in lines
+
+    async def test_file_not_found_raises(self, service: MRService) -> None:
+        mr = _make_mr(iid=2)
+        mr.source_branch = "feature"
+        service._detail_cache.set(2, service._convert_to_detail(mr))
+
+        exc = gitlab.exceptions.GitlabGetError(response_code=404, error_message="Not Found")
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            raise exc
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            with pytest.raises(FileNotFoundInMRError):
+                await service.get_file_lines(2, "nonexistent.py")
+
+
+class TestGetOrderBy:
+    def test_default_order_by(self, service: MRService) -> None:
+        service._client._config.sort_order = "updated_at"
+        assert service._get_order_by() == "updated_at"
+
+    def test_invalid_order_by_falls_back_to_default(self, service: MRService) -> None:
+        service._client._config.sort_order = "invalid_field"
+        assert service._get_order_by() == "updated_at"
+
+    def test_created_at_order_by(self, service: MRService) -> None:
+        service._client._config.sort_order = "created_at"
+        assert service._get_order_by() == "created_at"
+
+
+class TestGetMrListByCategory:
+    async def test_dispatches_to_correct_method(self, service: MRService) -> None:
+        from lazygitlab.services.types import MRCategory
+
+        empty = PaginatedResult(items=[], has_next_page=False, next_page=None)
+        with patch.object(service, "get_assigned_to_me", new=AsyncMock(return_value=empty)) as m:
+            result = await service._get_mr_list_by_category(MRCategory.ASSIGNED_TO_ME)
+        m.assert_called_once_with(page=1)
+        assert result is empty
+
+
+class TestConvertToFileChange:
+    def test_new_file(self, service: MRService) -> None:
+        change = {
+            "old_path": "",
+            "new_path": "new_file.py",
+            "new_file": True,
+            "deleted_file": False,
+            "renamed_file": False,
+        }
+        fc = service._convert_to_file_change(change)
+        assert fc.new_file is True
+        assert fc.new_path == "new_file.py"
+
+    def test_deleted_file(self, service: MRService) -> None:
+        change = {
+            "old_path": "old.py",
+            "new_path": "old.py",
+            "new_file": False,
+            "deleted_file": True,
+            "renamed_file": False,
+        }
+        fc = service._convert_to_file_change(change)
+        assert fc.deleted_file is True
+
+    def test_missing_keys_use_defaults(self, service: MRService) -> None:
+        fc = service._convert_to_file_change({})
+        assert fc.old_path == ""
+        assert fc.new_path == ""
+        assert fc.new_file is False
+
+
+class TestPaginatedResult:
+    async def test_has_next_page_when_next_url_present(self, service: MRService) -> None:
+        mr = _make_mr(iid=1)
+        mock_list = _make_mr_list(mr)
+        mock_list._next_url = "https://gitlab.example.com/api/v4/projects/1/mrs?page=2"
+        with patch("asyncio.to_thread", new=AsyncMock(return_value=mock_list)):
+            result = await service.get_assigned_to_me(page=1)
+        assert result.has_next_page is True
+        assert result.next_page == 2

@@ -28,6 +28,7 @@ def _make_mock_services():
     mr_service = MagicMock()
     mr_service.load = AsyncMock()
     mr_service.get_assigned_to_me = AsyncMock(return_value=empty_result)
+    mr_service.get_reviewer_is_me = AsyncMock(return_value=empty_result)
     mr_service.get_created_by_me = AsyncMock(return_value=empty_result)
     mr_service.get_unassigned = AsyncMock(return_value=empty_result)
     mr_service.get_assigned_to_others = AsyncMock(return_value=empty_result)

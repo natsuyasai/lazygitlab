@@ -174,3 +174,86 @@ class TestConfigManagerMapToConfig:
         manager = ConfigManager(config_path=config_file)
         with pytest.raises(ConfigError):
             manager.load()
+
+    def test_非glpatトークンで警告が表示される(self, tmp_path, capsys):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(_make_toml(token="oauth2-valid-token"), encoding="utf-8")
+        manager = ConfigManager(config_path=config_file)
+        manager.load()
+        captured = capsys.readouterr()
+        assert "glpat-" in captured.err
+
+    def test_全設定項目がマッピングされる(self, tmp_path):
+        content = (
+            '[gitlab]\nurl = "https://gitlab.example.com"\nssl_verify = false\n'
+            '[auth]\ntoken = "glpat-abc123"\n'
+            '[editor]\ncommand = "nvim"\nterminal = "xterm -e"\n'
+            '[logging]\nlevel = "DEBUG"\n'
+            '[appearance]\ntheme = "light"\npygments_style = "monokai"\n'
+            '[git]\nremote_name = "upstream"\n'
+        )
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(content, encoding="utf-8")
+        manager = ConfigManager(config_path=config_file)
+        config = manager.load()
+        assert config.ssl_verify is False
+        assert config.editor == "nvim"
+        assert config.terminal == "xterm -e"
+        assert config.log_level == "DEBUG"
+        assert config.theme == "light"
+        assert config.pygments_style == "monokai"
+        assert config.remote_name == "upstream"
+
+
+class TestConfigManagerValidateFull:
+    def test_全バリデーションが実行される(self):
+        manager = ConfigManager(config_path=Path("/tmp/dummy.toml"))
+        config = AppConfig(gitlab_url="", token="", log_level="BAD", theme="bad_theme")
+        errors = manager.validate(config)
+        assert len(errors) >= 3
+
+    def test_有効な設定ではエラーなし(self):
+        manager = ConfigManager(config_path=Path("/tmp/dummy.toml"))
+        config = AppConfig(gitlab_url="https://gitlab.com", token="glpat-abc")
+        errors = manager.validate(config)
+        assert errors == []
+
+
+class TestSaveSetting:
+    def test_既存キーを上書きする(self, tmp_path):
+        content = '[appearance]\ntheme = "dark"\n'
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(content, encoding="utf-8")
+        manager = ConfigManager(config_path=config_file)
+        manager.save_setting("appearance", "theme", "light")
+        result = config_file.read_text(encoding="utf-8")
+        assert 'theme = "light"' in result
+        assert 'theme = "dark"' not in result
+
+    def test_存在しないキーを追加する(self, tmp_path):
+        content = '[appearance]\ntheme = "dark"\n'
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(content, encoding="utf-8")
+        manager = ConfigManager(config_path=config_file)
+        manager.save_setting("appearance", "pygments_style", "monokai")
+        result = config_file.read_text(encoding="utf-8")
+        assert 'pygments_style = "monokai"' in result
+
+    def test_ファイルが存在しない場合は何もしない(self, tmp_path):
+        config_file = tmp_path / "nonexistent.toml"
+        manager = ConfigManager(config_path=config_file)
+        manager.save_setting("appearance", "theme", "dark")
+        assert not config_file.exists()
+
+    def test_複数セクションがある場合に正しいセクションを更新する(self, tmp_path):
+        content = (
+            '[gitlab]\nurl = "https://gitlab.com"\n'
+            '[appearance]\ntheme = "dark"\n'
+        )
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(content, encoding="utf-8")
+        manager = ConfigManager(config_path=config_file)
+        manager.save_setting("gitlab", "url", "https://new.example.com")
+        result = config_file.read_text(encoding="utf-8")
+        assert 'url = "https://new.example.com"' in result
+        assert 'theme = "dark"' in result

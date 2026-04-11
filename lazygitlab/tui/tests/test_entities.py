@@ -134,7 +134,7 @@ class TestFormatDiffLine:
 
 class TestGetCommentLines:
     def test_empty_discussions(self) -> None:
-        result = _get_comment_lines([])
+        result = _get_comment_lines([], "file.py")
         assert result == set()
 
     def test_inline_comment_lines(self) -> None:
@@ -146,7 +146,7 @@ class TestGetCommentLines:
             position=NotePosition(file_path="file.py", new_line=10),
         )
         disc = Discussion(id="abc", notes=[note])
-        result = _get_comment_lines([disc])
+        result = _get_comment_lines([disc], "file.py")
         assert 10 in result
 
     def test_old_line_comment(self) -> None:
@@ -158,7 +158,7 @@ class TestGetCommentLines:
             position=NotePosition(file_path="file.py", old_line=5),
         )
         disc = Discussion(id="def", notes=[note])
-        result = _get_comment_lines([disc])
+        result = _get_comment_lines([disc], "file.py")
         assert 5 in result
 
     def test_no_position_note(self) -> None:
@@ -170,7 +170,19 @@ class TestGetCommentLines:
             position=None,
         )
         disc = Discussion(id="ghi", notes=[note])
-        result = _get_comment_lines([disc])
+        result = _get_comment_lines([disc], "file.py")
+        assert result == set()
+
+    def test_different_file_path_excluded(self) -> None:
+        note = Note(
+            id=4,
+            author="user",
+            body="comment on other file",
+            created_at="2026-01-01",
+            position=NotePosition(file_path="other.py", new_line=20),
+        )
+        disc = Discussion(id="xyz", notes=[note])
+        result = _get_comment_lines([disc], "file.py")
         assert result == set()
 
 
@@ -197,6 +209,342 @@ class TestWrapText:
         from lazygitlab.tui.widgets.content_panel import _wrap_text
 
         assert _wrap_text("", 20) == ""
+
+
+class TestBuildOverviewText:
+    def test_basic_overview_contains_title(self) -> None:
+        from lazygitlab.models import MergeRequestDetail
+        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+
+        detail = MergeRequestDetail(
+            iid=1,
+            title="My MR",
+            description="",
+            author="alice",
+            status="opened",
+            labels=[],
+            web_url="https://gitlab.com/mr/1",
+            created_at="2026-01-01",
+            updated_at="2026-01-02",
+        )
+        result = _build_overview_text(detail, [])
+        assert "!1 My MR" in result
+        assert "alice" in result
+
+    def test_no_description_shows_placeholder(self) -> None:
+        from lazygitlab.models import MergeRequestDetail
+        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+
+        detail = MergeRequestDetail(
+            iid=2,
+            title="T",
+            description="",
+            author="bob",
+            status="opened",
+            labels=[],
+            web_url="",
+            created_at="",
+            updated_at="",
+        )
+        result = _build_overview_text(detail, [])
+        assert "(no description)" in result
+
+    def test_with_description_shows_description(self) -> None:
+        from lazygitlab.models import MergeRequestDetail
+        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+
+        detail = MergeRequestDetail(
+            iid=3,
+            title="T",
+            description="This is the description",
+            author="carol",
+            status="opened",
+            labels=["bug", "feature"],
+            web_url="",
+            created_at="",
+            updated_at="",
+        )
+        result = _build_overview_text(detail, [])
+        assert "This is the description" in result
+        assert "bug" in result
+
+    def test_with_discussions(self) -> None:
+        from lazygitlab.models import Discussion, MergeRequestDetail, Note
+        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+
+        note = Note(
+            id=1,
+            author="reviewer",
+            body="looks good",
+            created_at="2026-01-01",
+        )
+        disc = Discussion(id="d1", notes=[note])
+        detail = MergeRequestDetail(
+            iid=4,
+            title="T",
+            description="",
+            author="alice",
+            status="opened",
+            labels=[],
+            web_url="",
+            created_at="",
+            updated_at="",
+        )
+        result = _build_overview_text(detail, [disc])
+        assert "reviewer" in result
+        assert "looks good" in result
+        assert "Discussions (1)" in result
+
+    def test_with_image_in_description(self) -> None:
+        from lazygitlab.models import MergeRequestDetail
+        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+
+        detail = MergeRequestDetail(
+            iid=5,
+            title="T",
+            description="![screenshot](https://example.com/img.png)",
+            author="alice",
+            status="opened",
+            labels=[],
+            web_url="",
+            created_at="",
+            updated_at="",
+        )
+        result = _build_overview_text(detail, [])
+        assert "Images (1)" in result
+        assert "https://example.com/img.png" in result
+
+    def test_inline_comment_position_shown(self) -> None:
+        from lazygitlab.models import Discussion, MergeRequestDetail, Note, NotePosition
+        from lazygitlab.tui.widgets.content_panel import _build_overview_text
+
+        note = Note(
+            id=1,
+            author="rev",
+            body="inline note",
+            created_at="2026-01-01",
+            position=NotePosition(file_path="src/main.py", new_line=42),
+        )
+        disc = Discussion(id="d2", notes=[note])
+        detail = MergeRequestDetail(
+            iid=6,
+            title="T",
+            description="",
+            author="alice",
+            status="opened",
+            labels=[],
+            web_url="",
+            created_at="",
+            updated_at="",
+        )
+        result = _build_overview_text(detail, [disc])
+        assert "src/main.py" in result
+        assert "42" in result
+
+
+class TestExtractImages:
+    def test_no_images(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _extract_images
+
+        assert _extract_images("No images here") == []
+
+    def test_single_image(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _extract_images
+
+        result = _extract_images("![alt](https://example.com/img.png)")
+        assert result == [("alt", "https://example.com/img.png")]
+
+    def test_multiple_images(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _extract_images
+
+        text = "![a](http://a.com/1.png) and ![b](http://b.com/2.png)"
+        result = _extract_images(text)
+        assert len(result) == 2
+
+    def test_empty_alt(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _extract_images
+
+        result = _extract_images("![](https://example.com/img.png)")
+        assert result == [("", "https://example.com/img.png")]
+
+
+class TestBuildCommentMap:
+    def test_empty_discussions(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _build_comment_map
+
+        result = _build_comment_map([], "file.py")
+        assert result == {}
+
+    def test_maps_line_to_discussion(self) -> None:
+        from lazygitlab.models import Discussion, Note, NotePosition
+        from lazygitlab.tui.widgets.content_panel import _build_comment_map
+
+        note = Note(
+            id=1,
+            author="user",
+            body="comment",
+            created_at="2026-01-01",
+            position=NotePosition(file_path="file.py", new_line=10),
+        )
+        disc = Discussion(id="d1", notes=[note])
+        result = _build_comment_map([disc], "file.py")
+        assert 10 in result
+        assert disc in result[10]
+
+    def test_different_file_excluded(self) -> None:
+        from lazygitlab.models import Discussion, Note, NotePosition
+        from lazygitlab.tui.widgets.content_panel import _build_comment_map
+
+        note = Note(
+            id=1,
+            author="user",
+            body="comment",
+            created_at="2026-01-01",
+            position=NotePosition(file_path="other.py", new_line=5),
+        )
+        disc = Discussion(id="d1", notes=[note])
+        result = _build_comment_map([disc], "file.py")
+        assert result == {}
+
+    def test_deduplicates_discussion(self) -> None:
+        from lazygitlab.models import Discussion, Note, NotePosition
+        from lazygitlab.tui.widgets.content_panel import _build_comment_map
+
+        note1 = Note(
+            id=1,
+            author="u1",
+            body="a",
+            created_at="2026-01-01",
+            position=NotePosition(file_path="file.py", new_line=7),
+        )
+        note2 = Note(
+            id=2,
+            author="u2",
+            body="b",
+            created_at="2026-01-01",
+            position=NotePosition(file_path="file.py", new_line=7),
+        )
+        disc = Discussion(id="d1", notes=[note1, note2])
+        result = _build_comment_map([disc], "file.py")
+        assert len(result[7]) == 1
+
+
+class TestGetTokenColor:
+    def test_known_token_returns_color(self) -> None:
+        from pygments.token import Token
+
+        from lazygitlab.tui.widgets.content_panel import _get_token_color
+
+        result = _get_token_color(Token.Keyword)
+        assert result is not None
+
+    def test_unknown_token_returns_none(self) -> None:
+        from pygments.token import Token
+
+        from lazygitlab.tui.widgets.content_panel import _get_token_color
+
+        result = _get_token_color(Token.Other)
+        assert result is None
+
+    def test_subtoken_falls_back_to_parent(self) -> None:
+        from pygments.token import Token
+
+        from lazygitlab.tui.widgets.content_panel import _get_token_color
+
+        # Token.String is in _SYNTAX_COLORS, Token.String.Doc is also mapped separately
+        result = _get_token_color(Token.String)
+        assert result is not None
+
+
+class TestParseDiffHeaderLines:
+    def test_header_lines_parsed(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _parse_diff
+
+        diff = "--- a/foo.py\n+++ b/foo.py\n@@ -1,2 +1,2 @@\n context\n"
+        parsed = _parse_diff(diff)
+        types = [t for t, *_ in parsed]
+        assert "header" in types
+
+    def test_empty_diff(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _parse_diff
+
+        assert _parse_diff("") == []
+
+
+class TestApplyContextFilterGap:
+    def test_gap_created_for_far_context_lines(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
+
+        # Many context lines far from changes
+        diff = "@@ -1,20 +1,20 @@\n"
+        diff += " ctx\n" * 15 + "+added\n" + " ctx\n" * 15
+        parsed = _parse_diff(diff)
+        rows = _apply_context_filter(parsed, 3)
+        types = [t for t, *_ in rows]
+        assert "gap" in types
+
+    def test_forced_ctx_indices_shown(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _apply_context_filter, _parse_diff
+
+        diff = "@@ -1,10 +1,10 @@\n" + " ctx\n" * 10
+        parsed = _parse_diff(diff)
+        # Without forcing, all ctx with no changes should be collapsed to gap
+        rows_no_force = _apply_context_filter(parsed, 3)
+        # With forcing index 5 (forced ctx)
+        rows_forced = _apply_context_filter(parsed, 3, forced_ctx_indices={5})
+        types_forced = [t for t, *_ in rows_forced]
+        assert "ctx" in types_forced
+
+
+class TestFindFirstLastNewLine:
+    def test_finds_first_and_last(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _find_first_last_new_line, _parse_diff
+
+        diff = "@@ -1,3 +1,3 @@\n context\n+added\n context\n"
+        parsed = _parse_diff(diff)
+        first, last = _find_first_last_new_line(parsed)
+        assert first > 0
+        assert last >= first
+
+    def test_empty_parsed_returns_zeros(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _find_first_last_new_line
+
+        first, last = _find_first_last_new_line([])
+        assert first == 0
+        assert last == 0
+
+
+class TestGetLexerForPath:
+    def test_python_file_returns_lexer(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _get_lexer_for_path
+
+        lexer = _get_lexer_for_path("foo.py")
+        assert lexer is not None
+
+    def test_unknown_extension_returns_none(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _get_lexer_for_path
+
+        result = _get_lexer_for_path("foo.unknownextension12345")
+        assert result is None
+
+    def test_none_returns_none(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _get_lexer_for_path
+
+        assert _get_lexer_for_path(None) is None
+
+
+class TestBuildColorsFromPygmentsStyle:
+    def test_valid_style_returns_dict(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _build_colors_from_pygments_style
+
+        result = _build_colors_from_pygments_style("monokai")
+        assert isinstance(result, dict)
+
+    def test_invalid_style_returns_empty_dict(self) -> None:
+        from lazygitlab.tui.widgets.content_panel import _build_colors_from_pygments_style
+
+        result = _build_colors_from_pygments_style("no_such_style_xyz")
+        assert result == {}
 
 
 class TestSBSCursorSync:

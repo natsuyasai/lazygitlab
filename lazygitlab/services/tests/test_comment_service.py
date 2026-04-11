@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import gitlab.exceptions
 import pytest
 
 from lazygitlab.models import AppConfig
 from lazygitlab.services.comment_service import CommentService
 from lazygitlab.services.exceptions import (
+    DiscussionNotFoundError,
     EmptyCommentError,
+    GitLabConnectionError,
+    MRNotFoundError,
 )
 from lazygitlab.services.gitlab_client import GitLabClient
 
@@ -217,3 +221,173 @@ class TestConvertPosition:
         assert pos is not None
         assert pos.new_line == 10
         assert pos.old_line is None
+
+    def test_old_line_set(self, service: CommentService) -> None:
+        pos = service._convert_position({"new_path": "bar.py", "new_line": None, "old_line": 3})
+        assert pos is not None
+        assert pos.old_line == 3
+
+
+class TestAddInlineComment:
+    async def test_empty_body_raises(self, service: CommentService) -> None:
+        with pytest.raises(EmptyCommentError):
+            await service.add_inline_comment(1, "foo.py", 5, "", "new")
+
+    async def test_add_inline_comment_success(self, service: CommentService) -> None:
+        mock_discussion = MagicMock()
+        mock_discussion.attributes = {
+            "notes": [
+                {
+                    "id": 10,
+                    "author": {"username": "alice"},
+                    "body": "inline comment",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "position": {"new_path": "foo.py", "new_line": 5, "old_line": None},
+                }
+            ]
+        }
+        mock_mr = MagicMock()
+        mock_mr.diff_refs = {"base_sha": "aaa", "head_sha": "bbb", "start_sha": "ccc"}
+        mock_mr.discussions.create = MagicMock(return_value=mock_discussion)
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        service._project.mergerequests.get = MagicMock(return_value=mock_mr)
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            note = await service.add_inline_comment(1, "foo.py", 5, "inline comment", "new")
+        assert note.id == 10
+        assert note.author == "alice"
+
+    async def test_add_inline_comment_old_line(self, service: CommentService) -> None:
+        mock_discussion = MagicMock()
+        mock_discussion.attributes = {
+            "notes": [
+                {
+                    "id": 11,
+                    "author": {"username": "bob"},
+                    "body": "old line comment",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "position": {"new_path": "bar.py", "new_line": None, "old_line": 3},
+                }
+            ]
+        }
+        mock_mr = MagicMock()
+        mock_mr.diff_refs = {"base_sha": "a", "head_sha": "b", "start_sha": "c"}
+        mock_mr.discussions.create = MagicMock(return_value=mock_discussion)
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        service._project.mergerequests.get = MagicMock(return_value=mock_mr)
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            note = await service.add_inline_comment(1, "bar.py", 3, "old line comment", "old")
+        assert note.id == 11
+
+    async def test_404_raises_mr_not_found(self, service: CommentService) -> None:
+        exc = gitlab.exceptions.GitlabGetError(response_code=404, error_message="Not Found")
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            raise exc
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            with pytest.raises(MRNotFoundError):
+                await service.add_inline_comment(999, "foo.py", 1, "body", "new")
+
+
+class TestGetDiscussionsErrors:
+    async def test_404_raises_mr_not_found(self, service: CommentService) -> None:
+        exc = gitlab.exceptions.GitlabGetError(response_code=404, error_message="Not Found")
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            raise exc
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            with pytest.raises(MRNotFoundError):
+                await service.get_discussions(999)
+
+    async def test_500_raises_connection_error(self, service: CommentService) -> None:
+        exc = gitlab.exceptions.GitlabGetError(response_code=500, error_message="Server Error")
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            raise exc
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            with pytest.raises(GitLabConnectionError):
+                await service.get_discussions(1)
+
+
+class TestReplyToDiscussionErrors:
+    async def test_404_raises_mr_not_found(self, service: CommentService) -> None:
+        exc = gitlab.exceptions.GitlabGetError(response_code=404, error_message="Not Found")
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            raise exc
+
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            with pytest.raises(MRNotFoundError):
+                await service.reply_to_discussion(999, "disc-id", "body")
+
+
+class TestInvalidateCache:
+    async def test_invalidate_specific_mr(self, service: CommentService) -> None:
+        service._discussions_cache.set(1, [])
+        service._discussions_cache.set(2, [])
+        service.invalidate_cache(1)
+        assert service._discussions_cache.get(1) is None
+        assert service._discussions_cache.get(2) is not None
+
+    async def test_invalidate_all(self, service: CommentService) -> None:
+        service._discussions_cache.set(1, [])
+        service._discussions_cache.set(2, [])
+        service.invalidate_cache()
+        assert service._discussions_cache.get(1) is None
+        assert service._discussions_cache.get(2) is None
+
+
+class TestConvertDiscussion:
+    def test_system_notes_filtered(self, service: CommentService) -> None:
+        raw = MagicMock()
+        raw.id = "disc1"
+        raw.attributes = {
+            "notes": [
+                {
+                    "id": 1,
+                    "author": {"username": "gitlab"},
+                    "body": "system message",
+                    "created_at": "",
+                    "system": True,
+                    "position": None,
+                }
+            ]
+        }
+        result = service._convert_discussion(raw)
+        assert result is None
+
+    def test_mixed_notes_keeps_user_notes(self, service: CommentService) -> None:
+        raw = MagicMock()
+        raw.id = "disc2"
+        raw.attributes = {
+            "notes": [
+                {
+                    "id": 1,
+                    "author": {"username": "system"},
+                    "body": "auto",
+                    "created_at": "",
+                    "system": True,
+                    "position": None,
+                },
+                {
+                    "id": 2,
+                    "author": {"username": "user"},
+                    "body": "comment",
+                    "created_at": "",
+                    "system": False,
+                    "position": None,
+                },
+            ]
+        }
+        result = service._convert_discussion(raw)
+        assert result is not None
+        assert len(result.notes) == 1
+        assert result.notes[0].author == "user"
