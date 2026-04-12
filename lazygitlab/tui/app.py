@@ -32,6 +32,14 @@ _logger = get_logger(__name__)
 _CSS_PATH = Path(__file__).parent / "styles.tcss"
 
 # ターミナルエミュレータの候補: (コマンド名, エディタコマンドの前に置く追加引数)
+# Windows 用候補（検出順）
+_TERMINAL_CANDIDATES_WIN: list[tuple[str, list[str]]] = [
+    ("wt", ["-w", "0", "new-tab", "--"]),       # Windows Terminal
+    ("pwsh", ["-NoExit", "-Command"]),           # PowerShell 7+
+    ("powershell", ["-NoExit", "-Command"]),     # Windows PowerShell
+]
+
+# Unix/Linux/macOS 用候補
 _TERMINAL_CANDIDATES: list[tuple[str, list[str]]] = [
     ("xterm", ["-e"]),
     ("x-terminal-emulator", ["-e"]),
@@ -41,6 +49,9 @@ _TERMINAL_CANDIDATES: list[tuple[str, list[str]]] = [
     ("wezterm", ["start", "--"]),
     ("gnome-terminal", ["--"]),
 ]
+
+# Windows の cmd.exe シェル組み込みコマンド（shutil.which で見つからないもの）
+_WIN_SHELL_BUILTINS = {"start"}
 
 
 def _resolve_terminal_cmd(terminal_cfg: str) -> list[str] | None:
@@ -54,23 +65,39 @@ def _resolve_terminal_cmd(terminal_cfg: str) -> list[str] | None:
     """
     if terminal_cfg:
         parts = shlex.split(terminal_cfg)
-        if parts and shutil.which(parts[0]):
+        if not parts:
+            return None
+        # Windows: "start" は cmd.exe の組み込みコマンドのため shutil.which では見つからない。
+        # "cmd /c start ..." に変換して実行する。
+        is_windows = os.name == "nt"
+        if is_windows and parts[0].lower() in _WIN_SHELL_BUILTINS:
+            return ["cmd", "/c", *parts]
+        if shutil.which(parts[0]):
             return parts
         return None
 
-    # 環境変数 $TERMINAL を確認（"-e" スタイルと仮定）
-    env_val = os.environ.get("TERMINAL", "").strip()
-    if env_val:
-        name = shlex.split(env_val)[0]
-        if shutil.which(name):
-            return [name, "-e"]
+    is_windows = os.name == "nt"
+    if is_windows:
+        # Windows: 既知のターミナルエミュレータを順に試す
+        for name, extra_args in _TERMINAL_CANDIDATES_WIN:
+            if shutil.which(name):
+                return [name, *extra_args]
+        # フォールバック: cmd /c start で新しい cmd ウィンドウを開く
+        return ["cmd", "/c", "start", "cmd", "/k"]
+    else:
+        # 環境変数 $TERMINAL を確認（"-e" スタイルと仮定）
+        env_val = os.environ.get("TERMINAL", "").strip()
+        if env_val:
+            name = shlex.split(env_val)[0]
+            if shutil.which(name):
+                return [name, "-e"]
 
-    # 一般的なターミナルエミュレータを順に試す
-    for name, extra_args in _TERMINAL_CANDIDATES:
-        if shutil.which(name):
-            return [name, *extra_args]
+        # 一般的なターミナルエミュレータを順に試す
+        for name, extra_args in _TERMINAL_CANDIDATES:
+            if shutil.which(name):
+                return [name, *extra_args]
 
-    return None
+        return None
 
 
 class LazyGitLabApp(App):
