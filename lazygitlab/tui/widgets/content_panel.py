@@ -39,32 +39,31 @@ from lazygitlab.tui.screens.syntax_select_dialog import (
     SyntaxSelectDialog,
 )
 from lazygitlab.tui.widgets._diff_parser import (
+    _BOTTOM_LOAD_SENTINEL,
     _CONTEXT_LINES,
     _LOAD_MORE_LINES,
     _TOP_LOAD_SENTINEL,
-    _BOTTOM_LOAD_SENTINEL,
-    _parse_diff,
     _apply_context_filter,
     _find_first_last_new_line,
+    _parse_diff,
+)
+from lazygitlab.tui.widgets._diff_renderer import (
+    _DIFF_ADD_STYLE,
+    _DIFF_GAP_STYLE,
+    _DIFF_REM_STYLE,
+    _LINE_NO_WIDTH,
+    DiffGutter,
+    _wrap_text,
+)
+from lazygitlab.tui.widgets._overview import (
+    _build_comment_map,
+    _build_overview_text,
+    _get_comment_lines,
 )
 from lazygitlab.tui.widgets._syntax import (
     _SYNTAX_COLORS,
     _build_colors_from_pygments_style,
     _get_lexer_for_path,
-)
-from lazygitlab.tui.widgets._overview import (
-    _build_overview_text,
-    _get_comment_lines,
-    _build_comment_map,
-)
-
-from lazygitlab.tui.widgets._diff_renderer import (
-    _DIFF_ADD_STYLE,
-    _DIFF_REM_STYLE,
-    _DIFF_GAP_STYLE,
-    _LINE_NO_WIDTH,
-    _wrap_text,
-    DiffGutter,
 )
 
 _logger = get_logger(__name__)
