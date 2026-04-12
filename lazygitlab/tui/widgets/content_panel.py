@@ -101,8 +101,9 @@ class ContentPanel(Widget):
         self._current_mr_iid: int | None = None
         self._current_file_path: str | None = None
         self._selected_line: int | None = None
-        self._selected_line_type: str = "new"
+        self._selected_old_line: int | None = None
         self._diff_row_lines: list[int | None] = []
+        self._diff_row_old_lines: dict[int, int] = {}
         self._comment_lines: set[int] = set()
         self._editor_command: str = "vi"
         self._wrap_lines: bool = False
@@ -237,9 +238,11 @@ class ContentPanel(Widget):
             return
         row_idx = event.cursor_row
         if 0 <= row_idx < len(self._diff_row_lines):
-            line_no = self._diff_row_lines[row_idx]
-            if line_no is not None:
-                self._selected_line = line_no
+            new_n = self._diff_row_lines[row_idx]
+            old_n = self._diff_row_old_lines.get(row_idx)
+            if new_n is not None or old_n is not None:
+                self._selected_line = new_n
+                self._selected_old_line = old_n
 
         # フォーカスされているテーブルからのイベントのみ対向テーブルを同期する。
         # プログラムによる move_cursor が発する RowHighlighted は has_focus=False なので
@@ -327,7 +330,9 @@ class ContentPanel(Widget):
         table = self.query_one("#diff-table", DataTable)
         table.clear(columns=True)
         self._diff_row_lines = []
+        self._diff_row_old_lines = {}
         self._selected_line = None
+        self._selected_old_line = None
         self._forced_ctx_indices = set()
         self._inter_hunk_loaded = {}
         self._file_content = []
@@ -701,6 +706,7 @@ class ContentPanel(Widget):
     def _render_diff(self) -> None:
         """現在の状態で差分を DataTable にレンダリングする（ネットワークアクセスなし）。"""
         self._diff_row_lines = []
+        self._diff_row_old_lines = {}
         self._gap_row_ranges = {}
         self._gap_row_actions = {}
         rows = self._build_augmented_rows()
@@ -990,6 +996,8 @@ class ContentPanel(Widget):
                     height=row_height,
                 )
                 self._diff_row_lines.append(None)
+                if old_n is not None:
+                    self._diff_row_old_lines[row_idx] = old_n
             else:  # ctx
                 tokens = precomputed[code_row_idx]
                 code_row_idx += 1
@@ -1006,6 +1014,8 @@ class ContentPanel(Widget):
                     height=row_height,
                 )
                 self._diff_row_lines.append(new_n)
+                if old_n is not None:
+                    self._diff_row_old_lines[row_idx] = old_n
             row_idx += 1
 
     def _render_sbs_tables(
@@ -1079,6 +1089,8 @@ class ContentPanel(Widget):
                     height=row_height,
                 )
                 self._diff_row_lines.append(new_n2)
+                if old_n2 is not None:
+                    self._diff_row_old_lines[row_idx] = old_n2
                 row_idx += 1
             pending_rem.clear()
             pending_add.clear()
@@ -1265,6 +1277,8 @@ class ContentPanel(Widget):
                         height=row_height,
                     )
                     self._diff_row_lines.append(new_n)
+                    if old_n is not None:
+                        self._diff_row_old_lines[row_idx] = old_n
                 row_idx += 1
 
         _flush()
@@ -1499,13 +1513,33 @@ class ContentPanel(Widget):
         if self._view_state == ContentViewState.DIFF:
             if self._current_mr_iid is None or self._current_file_path is None:
                 return
-            line = self._selected_line or 1
+            new_line = self._selected_line
+            old_line = self._selected_old_line
+            if new_line is not None and old_line is not None:
+                # ctx (unchanged) line: both sides required by GitLab API
+                line = new_line
+                line_type = "new"
+            elif new_line is not None:
+                # add line
+                line = new_line
+                line_type = "new"
+                old_line = None
+            elif old_line is not None:
+                # rem line
+                line = old_line
+                line_type = "old"
+                old_line = None
+            else:
+                line = 1
+                line_type = "new"
+                old_line = None
             context = CommentContext(
                 mr_iid=self._current_mr_iid,
                 comment_type=CommentType.INLINE,
                 file_path=self._current_file_path,
                 line=line,
-                line_type=self._selected_line_type,
+                line_type=line_type,
+                old_line=old_line,
             )
         elif self._view_state == ContentViewState.OVERVIEW:
             if self._current_mr_iid is None:
@@ -1527,7 +1561,9 @@ class ContentPanel(Widget):
         self._current_mr_iid = None
         self._current_file_path = None
         self._selected_line = None
+        self._selected_old_line = None
         self._diff_row_lines = []
+        self._diff_row_old_lines = {}
         self._discussions = []
         self._comment_map = {}
         self._current_diff_text = ""

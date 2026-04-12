@@ -77,6 +77,7 @@ class CommentService:
         line: int,
         body: str,
         line_type: str,
+        old_line: int | None = None,
     ) -> Note:
         """差分行へのインラインコメントを投稿する。
 
@@ -86,6 +87,7 @@ class CommentService:
             line: コメント対象の行番号。
             body: コメント本文。
             line_type: "new"(追加行)または "old"(削除行)。
+            old_line: ctx行のold側行番号。指定時はnew_line/old_lineの両方をpositionに設定する。
 
         Raises:
             EmptyCommentError: コメント本文が空または空白のみの場合。
@@ -116,6 +118,9 @@ class CommentService:
             }
             if line_type == "new":
                 position["new_line"] = line
+                if old_line is not None:
+                    # ctx (unchanged) line: GitLab requires both new_line and old_line
+                    position["old_line"] = old_line
             else:
                 position["old_line"] = line
 

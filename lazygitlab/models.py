@@ -113,6 +113,7 @@ class CommentContext:
     file_path: str | None = None
     line: int | None = None
     line_type: str | None = None  # "new" または "old"
+    old_line: int | None = None  # ctx行のみ: old側の行番号
     discussion_id: str | None = None
 
     def __post_init__(self) -> None:

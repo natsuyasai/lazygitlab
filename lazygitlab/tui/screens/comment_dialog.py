@@ -94,6 +94,7 @@ class CommentDialog(ModalScreen[None]):
                     line=ctx.line,  # type: ignore[arg-type]
                     body=text,
                     line_type=ctx.line_type or "new",
+                    old_line=ctx.old_line,
                 )
             elif ctx.comment_type == CommentType.NOTE:
                 await self._comment_service.add_note(mr_iid=ctx.mr_iid, body=text)
