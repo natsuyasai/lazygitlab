@@ -129,14 +129,12 @@ class CommentService:
             }
             if line_type == "new":
                 position["new_line"] = line
-                # GitLab generates line_code as "sha_old_new"; nil becomes "" → invalid format.
-                # Always provide both sides, using 0 for the absent side.
-                position["old_line"] = old_line if old_line is not None else 0
-                position["line_code"] = _generate_line_code(file_path, old_line, line)
+                if old_line is not None:
+                    # context (unchanged) line: GitLab requires both new_line and old_line
+                    position["old_line"] = old_line
             else:
                 position["old_line"] = line
-                position["new_line"] = 0
-                position["line_code"] = _generate_line_code(file_path, line, None)
+            # line_code is generated server-side by GitLab; do not include it in the request.
 
             discussion = await asyncio.to_thread(
                 mr.discussions.create, {"body": body, "position": position}

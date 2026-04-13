@@ -324,12 +324,16 @@ class TestAddInlineComment:
             with pytest.raises(MRNotFoundError):
                 await service.add_inline_comment(999, "foo.py", 1, "body", "new")
 
-    async def test_position_includes_line_code_for_new_line(
+    async def test_position_new_line_only_for_add_line(
         self, service: CommentService
     ) -> None:
-        """追加行(new)のコメント投稿時に position に line_code が含まれることを確認する。"""
-        import hashlib
+        """追加行(new)のとき、position に new_line のみ含まれ old_line・line_code は含まれないこと。
 
+        GitLab API 仕様:
+        - 追加行: position[new_line] のみ送る。old_line は送らない
+        - line_code はクライアントから送らない（GitLab がサーバー側で生成する）
+        ref: https://docs.gitlab.com/api/discussions/
+        """
         mock_discussion = MagicMock()
         mock_discussion.attributes = {
             "notes": [
@@ -355,16 +359,20 @@ class TestAddInlineComment:
 
         call_args = mock_mr.discussions.create.call_args[0][0]
         position = call_args["position"]
-        sha = hashlib.sha1(b"foo.py").hexdigest()  # noqa: S324
-        assert "line_code" in position
-        assert position["line_code"] == f"{sha}_0_5"
+        assert position["new_line"] == 5
+        assert "old_line" not in position
+        assert "line_code" not in position
 
-    async def test_position_includes_line_code_for_old_line(
+    async def test_position_old_line_only_for_remove_line(
         self, service: CommentService
     ) -> None:
-        """削除行(old)のコメント投稿時に line_code の old_line 側が設定されることを確認する。"""
-        import hashlib
+        """削除行(old)のとき、position に old_line のみ含まれ new_line・line_code は含まれないこと。
 
+        GitLab API 仕様:
+        - 削除行: position[old_line] のみ送る。new_line は送らない
+        - line_code はクライアントから送らない（GitLab がサーバー側で生成する）
+        ref: https://docs.gitlab.com/api/discussions/
+        """
         mock_discussion = MagicMock()
         mock_discussion.attributes = {
             "notes": [
@@ -390,15 +398,20 @@ class TestAddInlineComment:
 
         call_args = mock_mr.discussions.create.call_args[0][0]
         position = call_args["position"]
-        sha = hashlib.sha1(b"bar.py").hexdigest()  # noqa: S324
-        assert position["line_code"] == f"{sha}_3_0"
+        assert position["old_line"] == 3
+        assert "new_line" not in position
+        assert "line_code" not in position
 
-    async def test_position_includes_line_code_for_context_line(
+    async def test_position_both_lines_for_context_line(
         self, service: CommentService
     ) -> None:
-        """コンテキスト行のコメント投稿時に line_code の両側が設定されることを確認する。"""
-        import hashlib
+        """コンテキスト行(変更なし行)のとき、position に new_line と old_line が両方含まれること。
 
+        GitLab API 仕様:
+        - 変更なし行: position[new_line] と position[old_line] を両方送る
+        - line_code はクライアントから送らない（GitLab がサーバー側で生成する）
+        ref: https://docs.gitlab.com/api/discussions/
+        """
         mock_discussion = MagicMock()
         mock_discussion.attributes = {
             "notes": [
@@ -420,87 +433,13 @@ class TestAddInlineComment:
 
         service._project.mergerequests.get = MagicMock(return_value=mock_mr)
         with patch("asyncio.to_thread", side_effect=mock_to_thread):
-            # old_line=8 を渡してコンテキスト行を指定
             await service.add_inline_comment(1, "baz.py", 10, "comment", "new", old_line=8)
 
         call_args = mock_mr.discussions.create.call_args[0][0]
         position = call_args["position"]
-        sha = hashlib.sha1(b"baz.py").hexdigest()  # noqa: S324
-        assert position["line_code"] == f"{sha}_8_10"
-
-    async def test_position_old_line_is_zero_for_pure_add_line(
-        self, service: CommentService
-    ) -> None:
-        """追加行(new)でold_lineなしのとき、position["old_line"]が0になること。
-
-        GitLabはposition[old_line]がnilだと line_code を "sha__N" と生成してしまい、
-        フォーマット検証 /\\A[0-9a-f]{40}_\\d+_\\d+\\z/ が失敗するため、
-        常に0をセットする必要がある。
-        """
-        mock_discussion = MagicMock()
-        mock_discussion.attributes = {
-            "notes": [
-                {
-                    "id": 10,
-                    "author": {"username": "alice"},
-                    "body": "comment",
-                    "created_at": "2026-01-01T00:00:00Z",
-                    "position": {"new_path": "foo.py", "new_line": 5, "old_line": None},
-                }
-            ]
-        }
-        mock_mr = MagicMock()
-        mock_mr.diff_refs = {"base_sha": "aaa", "head_sha": "bbb", "start_sha": "ccc"}
-        mock_mr.discussions.create = MagicMock(return_value=mock_discussion)
-
-        async def mock_to_thread(fn, *args, **kwargs):
-            return fn(*args, **kwargs)
-
-        service._project.mergerequests.get = MagicMock(return_value=mock_mr)
-        with patch("asyncio.to_thread", side_effect=mock_to_thread):
-            await service.add_inline_comment(1, "foo.py", 5, "comment", "new")
-
-        call_args = mock_mr.discussions.create.call_args[0][0]
-        position = call_args["position"]
-        assert "old_line" in position
-        assert position["old_line"] == 0
-
-    async def test_position_new_line_is_zero_for_pure_remove_line(
-        self, service: CommentService
-    ) -> None:
-        """削除行(old)のとき、position["new_line"]が0になること。
-
-        GitLabはposition[new_line]がnilだと line_code を "sha_N_" と生成してしまい、
-        フォーマット検証 /\\A[0-9a-f]{40}_\\d+_\\d+\\z/ が失敗するため、
-        常に0をセットする必要がある。
-        """
-        mock_discussion = MagicMock()
-        mock_discussion.attributes = {
-            "notes": [
-                {
-                    "id": 11,
-                    "author": {"username": "bob"},
-                    "body": "comment",
-                    "created_at": "2026-01-01T00:00:00Z",
-                    "position": {"new_path": "bar.py", "new_line": None, "old_line": 3},
-                }
-            ]
-        }
-        mock_mr = MagicMock()
-        mock_mr.diff_refs = {"base_sha": "a", "head_sha": "b", "start_sha": "c"}
-        mock_mr.discussions.create = MagicMock(return_value=mock_discussion)
-
-        async def mock_to_thread(fn, *args, **kwargs):
-            return fn(*args, **kwargs)
-
-        service._project.mergerequests.get = MagicMock(return_value=mock_mr)
-        with patch("asyncio.to_thread", side_effect=mock_to_thread):
-            await service.add_inline_comment(1, "bar.py", 3, "comment", "old")
-
-        call_args = mock_mr.discussions.create.call_args[0][0]
-        position = call_args["position"]
-        assert "new_line" in position
-        assert position["new_line"] == 0
+        assert position["new_line"] == 10
+        assert position["old_line"] == 8
+        assert "line_code" not in position
 
 
 class TestGetDiscussionsErrors:
