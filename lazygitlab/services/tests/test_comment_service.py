@@ -428,6 +428,80 @@ class TestAddInlineComment:
         sha = hashlib.sha1(b"baz.py").hexdigest()  # noqa: S324
         assert position["line_code"] == f"{sha}_8_10"
 
+    async def test_position_old_line_is_zero_for_pure_add_line(
+        self, service: CommentService
+    ) -> None:
+        """追加行(new)でold_lineなしのとき、position["old_line"]が0になること。
+
+        GitLabはposition[old_line]がnilだと line_code を "sha__N" と生成してしまい、
+        フォーマット検証 /\\A[0-9a-f]{40}_\\d+_\\d+\\z/ が失敗するため、
+        常に0をセットする必要がある。
+        """
+        mock_discussion = MagicMock()
+        mock_discussion.attributes = {
+            "notes": [
+                {
+                    "id": 10,
+                    "author": {"username": "alice"},
+                    "body": "comment",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "position": {"new_path": "foo.py", "new_line": 5, "old_line": None},
+                }
+            ]
+        }
+        mock_mr = MagicMock()
+        mock_mr.diff_refs = {"base_sha": "aaa", "head_sha": "bbb", "start_sha": "ccc"}
+        mock_mr.discussions.create = MagicMock(return_value=mock_discussion)
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        service._project.mergerequests.get = MagicMock(return_value=mock_mr)
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            await service.add_inline_comment(1, "foo.py", 5, "comment", "new")
+
+        call_args = mock_mr.discussions.create.call_args[0][0]
+        position = call_args["position"]
+        assert "old_line" in position
+        assert position["old_line"] == 0
+
+    async def test_position_new_line_is_zero_for_pure_remove_line(
+        self, service: CommentService
+    ) -> None:
+        """削除行(old)のとき、position["new_line"]が0になること。
+
+        GitLabはposition[new_line]がnilだと line_code を "sha_N_" と生成してしまい、
+        フォーマット検証 /\\A[0-9a-f]{40}_\\d+_\\d+\\z/ が失敗するため、
+        常に0をセットする必要がある。
+        """
+        mock_discussion = MagicMock()
+        mock_discussion.attributes = {
+            "notes": [
+                {
+                    "id": 11,
+                    "author": {"username": "bob"},
+                    "body": "comment",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "position": {"new_path": "bar.py", "new_line": None, "old_line": 3},
+                }
+            ]
+        }
+        mock_mr = MagicMock()
+        mock_mr.diff_refs = {"base_sha": "a", "head_sha": "b", "start_sha": "c"}
+        mock_mr.discussions.create = MagicMock(return_value=mock_discussion)
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        service._project.mergerequests.get = MagicMock(return_value=mock_mr)
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            await service.add_inline_comment(1, "bar.py", 3, "comment", "old")
+
+        call_args = mock_mr.discussions.create.call_args[0][0]
+        position = call_args["position"]
+        assert "new_line" in position
+        assert position["new_line"] == 0
+
 
 class TestGetDiscussionsErrors:
     async def test_404_raises_mr_not_found(self, service: CommentService) -> None:
