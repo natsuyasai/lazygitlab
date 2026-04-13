@@ -10,7 +10,6 @@ import pytest
 from lazygitlab.models import AppConfig
 from lazygitlab.services.comment_service import CommentService
 from lazygitlab.services.exceptions import (
-    DiscussionNotFoundError,
     EmptyCommentError,
     GitLabConnectionError,
     MRNotFoundError,
@@ -228,6 +227,37 @@ class TestConvertPosition:
         assert pos.old_line == 3
 
 
+class TestGenerateLineCode:
+    """_generate_line_code のユニットテスト。"""
+
+    def test_new_line_only(self) -> None:
+        """追加行: old=0, new=<line> の形式になること。"""
+        import hashlib
+
+        from lazygitlab.services.comment_service import _generate_line_code
+
+        sha = hashlib.sha1(b"foo.py").hexdigest()  # noqa: S324
+        assert _generate_line_code("foo.py", None, 5) == f"{sha}_0_5"
+
+    def test_old_line_only(self) -> None:
+        """削除行: old=<line>, new=0 の形式になること。"""
+        import hashlib
+
+        from lazygitlab.services.comment_service import _generate_line_code
+
+        sha = hashlib.sha1(b"bar.py").hexdigest()  # noqa: S324
+        assert _generate_line_code("bar.py", 3, None) == f"{sha}_3_0"
+
+    def test_context_line(self) -> None:
+        """コンテキスト行: old=<old_line>, new=<new_line> の形式になること。"""
+        import hashlib
+
+        from lazygitlab.services.comment_service import _generate_line_code
+
+        sha = hashlib.sha1(b"baz.py").hexdigest()  # noqa: S324
+        assert _generate_line_code("baz.py", 8, 10) == f"{sha}_8_10"
+
+
 class TestAddInlineComment:
     async def test_empty_body_raises(self, service: CommentService) -> None:
         with pytest.raises(EmptyCommentError):
@@ -293,6 +323,110 @@ class TestAddInlineComment:
         with patch("asyncio.to_thread", side_effect=mock_to_thread):
             with pytest.raises(MRNotFoundError):
                 await service.add_inline_comment(999, "foo.py", 1, "body", "new")
+
+    async def test_position_includes_line_code_for_new_line(
+        self, service: CommentService
+    ) -> None:
+        """追加行(new)のコメント投稿時に position に line_code が含まれることを確認する。"""
+        import hashlib
+
+        mock_discussion = MagicMock()
+        mock_discussion.attributes = {
+            "notes": [
+                {
+                    "id": 10,
+                    "author": {"username": "alice"},
+                    "body": "comment",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "position": {"new_path": "foo.py", "new_line": 5, "old_line": None},
+                }
+            ]
+        }
+        mock_mr = MagicMock()
+        mock_mr.diff_refs = {"base_sha": "aaa", "head_sha": "bbb", "start_sha": "ccc"}
+        mock_mr.discussions.create = MagicMock(return_value=mock_discussion)
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        service._project.mergerequests.get = MagicMock(return_value=mock_mr)
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            await service.add_inline_comment(1, "foo.py", 5, "comment", "new")
+
+        call_args = mock_mr.discussions.create.call_args[0][0]
+        position = call_args["position"]
+        sha = hashlib.sha1(b"foo.py").hexdigest()  # noqa: S324
+        assert "line_code" in position
+        assert position["line_code"] == f"{sha}_0_5"
+
+    async def test_position_includes_line_code_for_old_line(
+        self, service: CommentService
+    ) -> None:
+        """削除行(old)のコメント投稿時に line_code の old_line 側が設定されることを確認する。"""
+        import hashlib
+
+        mock_discussion = MagicMock()
+        mock_discussion.attributes = {
+            "notes": [
+                {
+                    "id": 11,
+                    "author": {"username": "bob"},
+                    "body": "comment",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "position": {"new_path": "bar.py", "new_line": None, "old_line": 3},
+                }
+            ]
+        }
+        mock_mr = MagicMock()
+        mock_mr.diff_refs = {"base_sha": "a", "head_sha": "b", "start_sha": "c"}
+        mock_mr.discussions.create = MagicMock(return_value=mock_discussion)
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        service._project.mergerequests.get = MagicMock(return_value=mock_mr)
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            await service.add_inline_comment(1, "bar.py", 3, "comment", "old")
+
+        call_args = mock_mr.discussions.create.call_args[0][0]
+        position = call_args["position"]
+        sha = hashlib.sha1(b"bar.py").hexdigest()  # noqa: S324
+        assert position["line_code"] == f"{sha}_3_0"
+
+    async def test_position_includes_line_code_for_context_line(
+        self, service: CommentService
+    ) -> None:
+        """コンテキスト行のコメント投稿時に line_code の両側が設定されることを確認する。"""
+        import hashlib
+
+        mock_discussion = MagicMock()
+        mock_discussion.attributes = {
+            "notes": [
+                {
+                    "id": 12,
+                    "author": {"username": "carol"},
+                    "body": "comment",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "position": {"new_path": "baz.py", "new_line": 10, "old_line": 8},
+                }
+            ]
+        }
+        mock_mr = MagicMock()
+        mock_mr.diff_refs = {"base_sha": "x", "head_sha": "y", "start_sha": "z"}
+        mock_mr.discussions.create = MagicMock(return_value=mock_discussion)
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        service._project.mergerequests.get = MagicMock(return_value=mock_mr)
+        with patch("asyncio.to_thread", side_effect=mock_to_thread):
+            # old_line=8 を渡してコンテキスト行を指定
+            await service.add_inline_comment(1, "baz.py", 10, "comment", "new", old_line=8)
+
+        call_args = mock_mr.discussions.create.call_args[0][0]
+        position = call_args["position"]
+        sha = hashlib.sha1(b"baz.py").hexdigest()  # noqa: S324
+        assert position["line_code"] == f"{sha}_8_10"
 
 
 class TestGetDiscussionsErrors:

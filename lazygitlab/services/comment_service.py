@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from typing import Any
 
 import gitlab.exceptions
@@ -19,6 +20,16 @@ from lazygitlab.services.exceptions import (
 from lazygitlab.services.gitlab_client import GitLabClient
 
 _CACHE_DISCUSSIONS_MAX = 100
+
+
+def _generate_line_code(file_path: str, old_line: int | None, new_line: int | None) -> str:
+    """GitLab diff コメント用の line_code を生成する。
+
+    形式: sha1(file_path)_{old_line}_{new_line}
+    行が存在しない側は 0 を使う。
+    """
+    sha = hashlib.sha1(file_path.encode()).hexdigest()  # noqa: S324
+    return f"{sha}_{old_line or 0}_{new_line or 0}"
 
 
 class CommentService:
@@ -121,8 +132,10 @@ class CommentService:
                 if old_line is not None:
                     # ctx (unchanged) line: GitLab requires both new_line and old_line
                     position["old_line"] = old_line
+                position["line_code"] = _generate_line_code(file_path, old_line, line)
             else:
                 position["old_line"] = line
+                position["line_code"] = _generate_line_code(file_path, line, None)
 
             discussion = await asyncio.to_thread(
                 mr.discussions.create, {"body": body, "position": position}
