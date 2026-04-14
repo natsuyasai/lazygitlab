@@ -713,9 +713,8 @@ class ContentPanel(Widget):
         self._diff_row_old_lines = {}
         self._gap_row_ranges = {}
         self._gap_row_actions = {}
+        self._diff_row_types = []
         rows = self._build_augmented_rows()
-        # ジャンプ用に行タイプを記録する
-        self._diff_row_types = [t for t, *_ in rows]
         overflow_markers = self._compute_overflow_comment_markers(rows)
 
         table = self.query_one("#diff-table", DataTable)
@@ -882,6 +881,7 @@ class ContentPanel(Widget):
                         height=1,
                     )
                     self._diff_row_lines.append(None)
+                    self._diff_row_types.append("gap")
                 elif t == "inter_below":
                     self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                     self._gap_row_actions[row_idx] = "inter_below"
@@ -893,6 +893,7 @@ class ContentPanel(Widget):
                         height=1,
                     )
                     self._diff_row_lines.append(None)
+                    self._diff_row_types.append("gap")
                 elif t == "inter_all":
                     self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                     self._gap_row_actions[row_idx] = "inter_all"
@@ -904,6 +905,7 @@ class ContentPanel(Widget):
                         height=1,
                     )
                     self._diff_row_lines.append(None)
+                    self._diff_row_types.append("gap")
                 elif t == "top_load":
                     self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                     self._gap_row_actions[row_idx] = "top_load"
@@ -915,6 +917,7 @@ class ContentPanel(Widget):
                         height=1,
                     )
                     self._diff_row_lines.append(None)
+                    self._diff_row_types.append("gap")
                 elif t == "bottom_load":
                     self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                     self._gap_row_actions[row_idx] = "bottom_load"
@@ -926,6 +929,7 @@ class ContentPanel(Widget):
                         height=1,
                     )
                     self._diff_row_lines.append(None)
+                    self._diff_row_types.append("gap")
                 elif gap_size > _LOAD_MORE_LINES:
                     # 大きいギャップ → 上側・下側の2行に分割
                     above_text = f"··· ↑ {_LOAD_MORE_LINES} lines above (Enter) ···"
@@ -940,6 +944,7 @@ class ContentPanel(Widget):
                         height=1,
                     )
                     self._diff_row_lines.append(None)
+                    self._diff_row_types.append("gap")
                     row_idx += 1
                     self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                     self._gap_row_actions[row_idx] = "below"
@@ -951,6 +956,7 @@ class ContentPanel(Widget):
                         height=1,
                     )
                     self._diff_row_lines.append(None)
+                    self._diff_row_types.append("gap")
                 else:
                     # 小さいギャップ → 全展開1行
                     self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
@@ -963,6 +969,7 @@ class ContentPanel(Widget):
                         height=1,
                     )
                     self._diff_row_lines.append(None)
+                    self._diff_row_types.append("gap")
             elif t in ("hunk", "header"):
                 # @@ ハンクヘッダーとファイルヘッダーは表示しない（行番号で代替可能）
                 continue
@@ -984,6 +991,7 @@ class ContentPanel(Widget):
                     height=row_height,
                 )
                 self._diff_row_lines.append(new_n)
+                self._diff_row_types.append("add")
             elif t == "rem":
                 tokens = precomputed[code_row_idx]
                 code_row_idx += 1
@@ -1002,6 +1010,7 @@ class ContentPanel(Widget):
                     height=row_height,
                 )
                 self._diff_row_lines.append(None)
+                self._diff_row_types.append("rem")
                 if old_n is not None:
                     self._diff_row_old_lines[row_idx] = old_n
             else:  # ctx
@@ -1020,6 +1029,7 @@ class ContentPanel(Widget):
                     height=row_height,
                 )
                 self._diff_row_lines.append(new_n)
+                self._diff_row_types.append("ctx")
                 if old_n is not None:
                     self._diff_row_old_lines[row_idx] = old_n
             row_idx += 1
@@ -1097,6 +1107,14 @@ class ContentPanel(Widget):
                 self._diff_row_lines.append(new_n2)
                 if old_n2 is not None:
                     self._diff_row_old_lines[row_idx] = old_n2
+                if old_n2 is not None and new_n2 is None:
+                    self._diff_row_types.append("rem")
+                elif new_n2 is not None and old_n2 is None:
+                    self._diff_row_types.append("add")
+                elif old_n2 is not None and new_n2 is not None:
+                    self._diff_row_types.append("rem")
+                else:
+                    self._diff_row_types.append("ctx")
                 row_idx += 1
             pending_rem.clear()
             pending_add.clear()
@@ -1142,6 +1160,7 @@ class ContentPanel(Widget):
                             height=1,
                         )
                         self._diff_row_lines.append(None)
+                        self._diff_row_types.append("gap")
                     elif t == "inter_below":
                         self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                         self._gap_row_actions[row_idx] = "inter_below"
@@ -1158,6 +1177,7 @@ class ContentPanel(Widget):
                             height=1,
                         )
                         self._diff_row_lines.append(None)
+                        self._diff_row_types.append("gap")
                     elif t == "inter_all":
                         self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                         self._gap_row_actions[row_idx] = "inter_all"
@@ -1174,6 +1194,7 @@ class ContentPanel(Widget):
                             height=1,
                         )
                         self._diff_row_lines.append(None)
+                        self._diff_row_types.append("gap")
                     elif t == "top_load":
                         self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                         self._gap_row_actions[row_idx] = "top_load"
@@ -1190,6 +1211,7 @@ class ContentPanel(Widget):
                             height=1,
                         )
                         self._diff_row_lines.append(None)
+                        self._diff_row_types.append("gap")
                     elif t == "bottom_load":
                         self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                         self._gap_row_actions[row_idx] = "bottom_load"
@@ -1206,6 +1228,7 @@ class ContentPanel(Widget):
                             height=1,
                         )
                         self._diff_row_lines.append(None)
+                        self._diff_row_types.append("gap")
                     elif gap_size > _LOAD_MORE_LINES:
                         # 大きいギャップ → 上側・下側の2行に分割
                         above_text = f"··· ↑ {_LOAD_MORE_LINES} lines above (Enter) ···"
@@ -1225,6 +1248,7 @@ class ContentPanel(Widget):
                             height=1,
                         )
                         self._diff_row_lines.append(None)
+                        self._diff_row_types.append("gap")
                         row_idx += 1
                         self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
                         self._gap_row_actions[row_idx] = "below"
@@ -1241,6 +1265,7 @@ class ContentPanel(Widget):
                             height=1,
                         )
                         self._diff_row_lines.append(None)
+                        self._diff_row_types.append("gap")
                     else:
                         # 小さいギャップ → 全展開1行
                         self._gap_row_ranges[row_idx] = (old_n, new_n)  # type: ignore[arg-type]
@@ -1258,6 +1283,7 @@ class ContentPanel(Widget):
                             height=1,
                         )
                         self._diff_row_lines.append(None)
+                        self._diff_row_types.append("gap")
                 elif t in ("hunk", "header"):
                     # @@ ハンクヘッダーとファイルヘッダーは表示しない
                     continue
@@ -1283,6 +1309,7 @@ class ContentPanel(Widget):
                         height=row_height,
                     )
                     self._diff_row_lines.append(new_n)
+                    self._diff_row_types.append("ctx")
                     if old_n is not None:
                         self._diff_row_old_lines[row_idx] = old_n
                 row_idx += 1
