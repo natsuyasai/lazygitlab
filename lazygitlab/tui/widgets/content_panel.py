@@ -133,6 +133,8 @@ class ContentPanel(Widget):
         self._bottom_extra_count: int = 0
         self._first_diff_new_line: int = 0
         self._last_diff_new_line: int = 0
+        # ジャンプ用: 各テーブル行の差分タイプ ("add"/"rem"/"ctx" 等)
+        self._diff_row_types: list[str] = []
 
     def compose(self) -> ComposeResult:
         yield Static("Select an MR from the list.", id="empty-hint")
@@ -710,6 +712,8 @@ class ContentPanel(Widget):
         self._gap_row_ranges = {}
         self._gap_row_actions = {}
         rows = self._build_augmented_rows()
+        # ジャンプ用に行タイプを記録する
+        self._diff_row_types = [t for t, *_ in rows]
         overflow_markers = self._compute_overflow_comment_markers(rows)
 
         table = self.query_one("#diff-table", DataTable)
@@ -1564,6 +1568,7 @@ class ContentPanel(Widget):
         self._selected_old_line = None
         self._diff_row_lines = []
         self._diff_row_old_lines = {}
+        self._diff_row_types = []
         self._discussions = []
         self._comment_map = {}
         self._current_diff_text = ""
