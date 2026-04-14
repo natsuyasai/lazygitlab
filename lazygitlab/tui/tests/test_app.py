@@ -210,7 +210,7 @@ async def test_app_connection_error_shows_error_dialog() -> None:
             await pilot.pause(0.1)
             # MRListPanel が未マウントの状態でのアクションが安全に実行されること
             # (except ブロックのカバレッジ)
-            await pilot.press("left_square_bracket")  # action_toggle_sidebar → except block
+            await pilot.press("backslash")  # action_toggle_sidebar → except block
             await pilot.press("m")  # action_focus_mr_list → except block
             await pilot.pause(0.1)
 

@@ -127,9 +127,9 @@ async def test_sidebar_toggle():
         app = LazyGitLabApp(config=config, initial_mr_id=None)
         async with app.run_test() as pilot:
             assert app._sidebar_visible is True
-            await pilot.press("left_square_bracket")
+            await pilot.press("backslash")
             assert app._sidebar_visible is False
-            await pilot.press("left_square_bracket")
+            await pilot.press("backslash")
             assert app._sidebar_visible is True
 
 
