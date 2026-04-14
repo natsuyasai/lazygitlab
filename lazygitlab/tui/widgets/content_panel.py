@@ -79,6 +79,8 @@ class ContentPanel(Widget):
         Binding("s", "select_syntax", "Syntax", priority=True),
         Binding("p", "select_style", "Style", priority=True),
         Binding("a", "expand_all_lines", "All lines", priority=True),
+        Binding("right_square_bracket", "jump_next_diff_line", "Next diff", priority=True),
+        Binding("left_square_bracket", "jump_prev_diff_line", "Prev diff", priority=True),
         Binding("j", "diff_cursor_down", "Down", show=False),
         Binding("k", "diff_cursor_up", "Up", show=False),
         Binding("h", "diff_scroll_left", "Left", show=False),
@@ -1512,6 +1514,32 @@ class ContentPanel(Widget):
         else:
             self.query_one("#diff-table-left", DataTable).scroll_right(animate=False)
             self.query_one("#diff-table-right", DataTable).scroll_right(animate=False)
+
+    def action_jump_next_diff_line(self) -> None:
+        """次の変更行 (add/rem) へカーソルを移動する。"""
+        if self._view_state != ContentViewState.DIFF:
+            return
+        table = self._focused_diff_table()
+        if table is None:
+            return
+        current = table.cursor_row
+        for i in range(current + 1, len(self._diff_row_types)):
+            if self._diff_row_types[i] in ("add", "rem"):
+                table.move_cursor(row=i, animate=False)
+                return
+
+    def action_jump_prev_diff_line(self) -> None:
+        """前の変更行 (add/rem) へカーソルを移動する。"""
+        if self._view_state != ContentViewState.DIFF:
+            return
+        table = self._focused_diff_table()
+        if table is None:
+            return
+        current = table.cursor_row
+        for i in range(current - 1, -1, -1):
+            if self._diff_row_types[i] in ("add", "rem"):
+                table.move_cursor(row=i, animate=False)
+                return
 
     async def action_add_comment(self) -> None:
         if self._view_state == ContentViewState.DIFF:
