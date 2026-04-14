@@ -111,7 +111,7 @@ class LazyGitLabApp(App):
         Binding("r", "refresh", "Refresh"),
         Binding("m", "focus_mr_list", "Focus MR"),
         Binding("e", "open_in_editor", "Editor", priority=True),
-        Binding("left_square_bracket", "toggle_sidebar", "Toggle Sidebar"),
+        Binding("backslash", "toggle_sidebar", "Toggle Sidebar"),
         Binding("b", "checkout_branch", "Checkout Branch"),
     ]
 

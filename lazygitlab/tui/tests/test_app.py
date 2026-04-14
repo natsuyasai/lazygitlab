@@ -74,11 +74,11 @@ async def test_app_action_toggle_sidebar() -> None:
             await pilot.pause(0.8)
             # 初期状態ではサイドバーが表示されていること
             assert app._sidebar_visible is True
-            # '[' キーでサイドバーを非表示にする
-            await pilot.press("left_square_bracket")
+            # '\' キーでサイドバーを非表示にする
+            await pilot.press("backslash")
             assert app._sidebar_visible is False
             # もう一度押すと表示に戻る
-            await pilot.press("left_square_bracket")
+            await pilot.press("backslash")
             assert app._sidebar_visible is True
 
 
